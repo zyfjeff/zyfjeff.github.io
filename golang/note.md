@@ -51,3 +51,5 @@
   2. `cmd.Stdout` 和 `cmd.Stderr`
   3. `cmd.StdoutPipe` 和 `cmd.StderrPipe`
   4. `cmd.Env`设置程序执行的环境变量
+
+* https://blog.drewolson.org/dependency-injection-in-go 依赖注入 DIC
