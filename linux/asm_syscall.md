@@ -1,8 +1,8 @@
 
 ## Linux: x86-64 syscall
 
-The syscall number is passed in register rax. Parameters are passed in registers [rdi, rsi, rdx, rcx, r8, r9]. I haven’t found documentation on what x86-64 Linux does for syscalls with more than six parameters. The syscall instruction is used to pass control to the kernel.
-
+The syscall number is passed in register rax. Parameters are passed in registers [rdi, rsi, rdx, rcx, r8, r9]. 
+I haven’t found documentation on what x86-64 Linux does for syscalls with more than six parameters. The syscall instruction is used to pass control to the kernel.
 Linux syscall numbers for x86-64 are defined in arch/x86/entry/syscalls/syscall_64.tbl.
 
 ```

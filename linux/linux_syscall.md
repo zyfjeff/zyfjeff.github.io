@@ -81,4 +81,22 @@ main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
 }
 ```
-reference: http://man7.org/linux/man-pages/man2/kcmp.2.html
+
+### reference:
+1. [man pages](http://man7.org/linux/man-pages/man2/kcmp.2.html)
+
+## vsock (4.8+)
+
+```
+  #include <sys/socket.h>
+  #include <linux/vm_sockets.h>
+
+  stream_socket = socket(AF_VSOCK, SOCK_STREAM, 0);
+  datagram_socket = socket(AF_VSOCK, SOCK_DGRAM, 0);
+```
+
+这是一个新的socket类型，是Linux独有的，主要是用于虚拟机和宿主机之间的通信。
+
+reference:
+1. [man pages](http://man7.org/linux/man-pages/man7/vsock.7.html)
+2. [vsock test](https://cregit.linuxsources.org/code/4.19/tools/testing/vsock/vsock_diag_test.c.html)

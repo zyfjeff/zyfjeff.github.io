@@ -17,18 +17,18 @@ int main() {
   int ret;
   ret = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
   perror("setsockopt:");
-  
+
   struct sockaddr_in name;
   name.sin_family = AF_INET;
   name.sin_port = htons(9999);
   name.sin_addr.s_addr = htonl(INADDR_ANY);
-  
+
   ret = bind(fd, (struct sockaddr*)&name, sizeof(name));
   perror("bind:");
-  
+
   struct sockaddr_in remote_addr;
   socklen_t addr_len = sizeof(sockaddr_in);
-  
+
   ret = listen(fd, 128);
   perror("listen:");
 
@@ -69,6 +69,8 @@ int value = 1;
 int ret;
 ret = setsockopt(fd, SOL_IP, IP_TRANSPARENT, &value, sizeof(value));
 ```
+
+借助IP_TRANSPARENT这个socket选项可以使得程序监听在一个非本机的IP地址上。
 
 #### Reference
 

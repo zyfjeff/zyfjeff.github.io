@@ -53,6 +53,30 @@ refFold<int&>(0); # compile error
 1. https://www.fluentcpp.com/2016/12/05/named-constructors/
 2. https://foonathan.net/blog/2016/10/19/strong-typedefs.html
 
+
+## constexpr 和 static_assert
+
+```
+#include <iostream>
+#include <type_traits>
+
+template<class T> struct dependent_false : std::false_type {};
+
+template <typename T>
+void f() {
+     if constexpr (std::is_arithmetic<T>::value) {
+     } else {
+       // 这里不能直接 static_assert(false, "Must be aruthmetic");
+       static_assert(dependent_false<T>::value, "Must be arithmetic"); // ok
+     }
+}
+
+int main() {
+  f<int*>();
+}
+```
+Ref: https://en.cppreference.com/w/cpp/language/if#Constexpr_If
+
 ## Curiously Recurring Template Pattern (CRTP)
 递归的奇异模版，有两个特点:
 1. 从模版类继承
