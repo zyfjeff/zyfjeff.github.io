@@ -39,7 +39,7 @@ ApiServer仅接收JSON格式的资源定义:(yaml更易读，可以无损转化�
 大部分资源的配置清单都由五个部分组成:
 1. apiVersion: group/version (kubectl api-versions，省略掉组的话就是core类型的核心组)
 2. kind: 资源类型
-3. metadata: 
+3. metadata:
 	1. name
 	2. namespace
 	3. labels
@@ -131,7 +131,7 @@ Image Entrypoint|Image Cmd|Container command|Container args|Command run
 
 标签选择器:
 1. 等值关系 =, ==, !=
-2. 集合关系 
+2. 集合关系
   1. KEY in (VALUE...)
   2. KEY notin (VALUE...)
   3. KEY
@@ -153,7 +153,7 @@ Image Entrypoint|Image Cmd|Container command|Container args|Command run
 ReplicationController: 已经废弃
 ReplicaSet: 自动扩缩容
 Deployment: 控制ReplicaSet来间接的控制pods
-DaemonSet: 
+DaemonSet:
 Job:
 Crontab:
 StatefulSet
@@ -166,12 +166,12 @@ spec:
       LABEL
   template: 容器模版
     metadata:
-      name: 
+      name:
       labels: 和上面的标签选择器要一致
         LABEL
     spec:
       containers:
-      -name: 
+      -name:
        image:
        ports:
        -name:
@@ -196,7 +196,7 @@ spec:
   replicas: 2
   rollingUpdatesStrategy:
   strategy: 更新策略
-    rollingUpdate: 
+    rollingUpdate:
       maxSurge : 最多可超过的容器数量/比例
       maxUnavailable: 最多不可用的容器数量
     type: Recreate|RollingUpdate
@@ -233,14 +233,14 @@ spec:
 ## DaemonSet
 
 spec:
-  type: 
+  type:
   rollingUpdate:
     maxUnavailable:
 
 ## Service
 1. userspace: 先到service ip，然后转到node上的kube-proxy，由kube-proxy向后转发
 2. iptables: 直接iptables转发，不需要kube-proxy
-3. ipvs: 
+3. ipvs:
 
 
 apiVersion: v1
@@ -279,7 +279,7 @@ kubectl create namespace xxx
 kubectl delete namespace xxx
 ```
 
-example: 
+example:
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
@@ -328,12 +328,12 @@ spec:
   - name
     image:
     volumeMounts:
-    - name: 
+    - name:
       mountPath:
   volumes:
   -name:
    hostPath:
-     path: 
+     path:
      type: DirectoryOrCreate
 
 PVC: 封装存储的细节，也是k8s中的一个资源

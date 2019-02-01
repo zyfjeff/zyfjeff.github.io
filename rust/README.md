@@ -260,19 +260,46 @@ fn apply_to_3<F>(f: F) -> i32 where
     f(3)
 }
 ```
-* Rust范型的使用
+
+* borrowing
+
+1. When data is immutably borrowed, it also freezes. Frozen data can't be modified via the original object until all references to it go out of scope:
+2. Data can be immutably borrowed any number of times, but while immutably borrowed, the original data can't be mutably borrowed. On the other hand, only one mutable borrow is allowed at a time. The original data can be borrowed again only after the mutable reference goes out of scope
 
 ```
-fn call_me<F>(f: F) where
-  F: FnOnce() {
-  f()
-}
+fn main() {
+    let mut _mutable_integer = 7i32;
 
-fn call_me<F: Fn()>(f: F) {
-      f()
+    {
+        // Borrow `_mutable_integer`
+        let _large_integer = &_mutable_integer;
+
+        // Error! `_mutable_integer` is frozen in this scope
+        _mutable_integer = 50;
+        // FIXME ^ Comment out this line
+
+        // `_large_integer` goes out of scope
+    }
+
+    // Ok! `_mutable_integer` is not frozen in this scope
+    _mutable_integer = 3;
 }
 ```
 
+* Function with lifetimes
+
+function signatures with lifetimes have a few constraints:
+
+1. any reference must have an annotated lifetime.
+2. any reference being returned must have the same lifetime as an input or be static.
+
+* Diverging functions 偏离函数就是返回值是`!`的函数
+* `#![no_std]` 禁用rust std标准库
+* `#[panic_handler]` 自定义panic hook函数
+* `Copy trait`本质上实现是添加了 `#[lang = "copy"]`编译器属性，eh_personality则是用来告诉编译器实现栈解旋
+* `#[repr(u8)]` 指定enum使用`u8`类型来存储
+* `#[derive(Debug, Clone, Copy, PartialEq, Eq)]` 开启Copy语义
+* `repr(C)` 让rust中的struct字段顺序和C中的struct一致
 
 ## Link
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)

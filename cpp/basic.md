@@ -54,6 +54,25 @@ refFold<int&>(0); # compile error
 2. https://foonathan.net/blog/2016/10/19/strong-typedefs.html
 
 
+## 在析狗函数中调用const成员函数
+
+const and volatile semantics (7.1.6.1) are not applied on an object under destruction.
+They stop being in effect when the destructor for the most derived object (1.8) starts.
+
+```
+class Stuff
+{
+public:
+    // const、volatile语义在析构的时候是无用的，所以这里调用的foo()总是 non-const的。
+    ~Stuff() { foo(); }
+
+    void foo() const { cout << "const foo" << endl; }
+    void foo()       { cout << "non-const foo" << endl; }
+};
+```
+
+Ref: https://stackoverflow.com/questions/53840945/figuring-out-the-constness-of-an-object-within-its-destructor
+
 ## constexpr 和 static_assert
 
 ```

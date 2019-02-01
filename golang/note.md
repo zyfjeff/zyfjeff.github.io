@@ -53,3 +53,27 @@
   4. `cmd.Env`设置程序执行的环境变量
 
 * https://blog.drewolson.org/dependency-injection-in-go 依赖注入 DIC
+
+## profiling
+
+1. CPU profiling runtime每隔10ms中断自己，然后记录下当前协程的stack trace
+2. Memory profiling 只记录堆分配场景下的stack trace，栈分配则不会记录，也是采样的方式，每1000次分配就采样一次，这个比率可以改变。
+3. 因为Memory profiling是基于堆分配了但是没有使用的内存进行采样的，所以用Memory profiling来探测程序的内存使用量是很难的。
+4. Block profiling和记录协程花在等待共享资源上的时间，这个对于探测程序是否含有并发瓶颈很有帮助。
+  * 发送和接收一个unbuffered的channel
+  * 给一个full channel发送消息，或者从一个空的channel上接收消息
+  * 试图调用sync.Mutex的Lock方法，但是被其他协程锁住
+5. Mutex profiling
+
+> Do not enable more than one kind of profile at a time.
+
+关闭CPU变频，是CPU始终处于高频
+```
+$ sudo bash
+# for i in /sys/devices/system/cpu/cpu[0-7]
+do
+      echo performance > $i/cpufreq/scaling_governor
+      done
+#
+```
+6.  `--inuse_objects `显示分配的内存数量而不是大小
