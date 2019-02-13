@@ -42,8 +42,7 @@ public:
   	return *std::dynamic_pointer_cast<T>(get()); 
   }
   virtual void runOnAllThreads(Event::PostCb cb) PURE;
-  virtual void runOnAllThreads(Event::PostCb cb, 
-							   Event::PostCb all_threads_complete_cb) PURE;
+  virtual void runOnAllThreads(Event::PostCb cb, Event::PostCb all_threads_complete_cb) PURE;
   typedef std::function<
   	ThreadLocalObjectSharedPtr(Event::Dispatcher& dispatcher)> InitializeCb;
   virtual void set(InitializeCb cb) PURE;
@@ -78,8 +77,7 @@ public:
 ```cpp
 class Instance : public SlotAllocator {
 public:
-  virtual void registerThread(Event::Dispatcher& dispatcher, 
-							  bool main_thread) PURE;
+  virtual void registerThread(Event::Dispatcher& dispatcher, bool main_thread) PURE;
   virtual void shutdownGlobalThreading() PURE;
   virtual void shutdownThread() PURE;
   virtual Event::Dispatcher& dispatcher() PURE;
@@ -97,8 +95,7 @@ public:
   // ThreadLocal::Instance
   ........
 private:
-  static void setThreadLocal(uint32_t index, 
-							 ThreadLocalObjectSharedPtr object);
+  static void setThreadLocal(uint32_t index, ThreadLocalObjectSharedPtr object);
   static thread_local ThreadLocalData thread_local_data_;
   std::vector<SlotImpl*> slots_;
   std::list<std::reference_wrapper<Event::Dispatcher>> registered_threads_;
@@ -111,8 +108,7 @@ private:
 `main_thread_dispatcher_`用来保存主线程的`Dispatcher`对象，`registered_threads_`用来保存所有注册到`ThreadLocal`中的`Dispatcher`对象。`slots_`则保存了所有分配出去的`Slot`，每分配出一个`Slot`就会new一个`SlotImpl`对象，然后保存在`slots_`中，使用者通过分配的`Slot`，拿到其对应的索引值，然后通过`setThreadLocal`静态方法就可以把要共享的数据放到线程存储中了。
 
 ```cpp
-void InstanceImpl::setThreadLocal(uint32_t index, 
-								  ThreadLocalObjectSharedPtr object) {
+void InstanceImpl::setThreadLocal(uint32_t index, ThreadLocalObjectSharedPtr object) {
   if (thread_local_data_.data_.size() <= index) {
     thread_local_data_.data_.resize(index + 1);
   }
@@ -124,8 +120,7 @@ void InstanceImpl::setThreadLocal(uint32_t index,
 线程注册的过程也很简单，就是把传递进来的`Dispatcher`对象放到`registered_threads_`中，需要注意的是这里用的是`std::reference_wrapper<Event::Dispatcher>`，保存的是`Dispatcher`的引用。
 
 ```cpp
-void InstanceImpl::registerThread(Event::Dispatcher& dispatcher, 
-								  bool main_thread) {
+void InstanceImpl::registerThread(Event::Dispatcher& dispatcher, bool main_thread) {
   ASSERT(std::this_thread::get_id() == main_thread_id_);
   ASSERT(!shutdown_);
 
@@ -198,8 +193,7 @@ void InstanceImpl::runOnAllThreads(Event::PostCb cb) {
   cb();
 }
 
-void InstanceImpl::runOnAllThreads(Event::PostCb cb, 
-								   Event::PostCb all_threads_complete_cb) {
+void InstanceImpl::runOnAllThreads(Event::PostCb cb, Event::PostCb all_threads_complete_cb) {
   ASSERT(std::this_thread::get_id() == main_thread_id_);
   ASSERT(!shutdown_);
   cb();
@@ -269,9 +263,7 @@ struct ThreadLocalPool : public ThreadLocal::ThreadLocalObject {
     ThreadLocalPool(InstanceImpl& parent, Event::Dispatcher& dispatcher,
                     const std::string& cluster_name);
     ~ThreadLocalPool();
-    PoolRequest* makeRequest(const std::string& hash_key, 
-							 const RespValue& request,
-                             PoolCallbacks& callbacks);
+    PoolRequest* makeRequest(const std::string& hash_key, const RespValue& request, PoolCallbacks& callbacks);
     void onHostsRemoved(const std::vector<Upstream::HostSharedPtr>& hosts_removed);
 
     InstanceImpl& parent_;
@@ -286,9 +278,7 @@ struct ThreadLocalPool : public ThreadLocal::ThreadLocalObject {
 `redis_proxy`中定义了一个`ThreadLocalPool`，这个`ThreadLocalPool`又依赖较为基础的`ThreadLocalCluster`(是`ThreadLocalClusterManagerImpl`的数据成员，也就是`Cluster manager`所对应的`ThreadLocalObject`对象)，如果`shutdownThread`按照顺序的方式析构的话，那么`ThreadLocalPool`中使用的`ThreadLocalCluster`(其实是`ThreadLocalClusterManagerImpl`会先析构)会先被析构，然后才是`ThreadLocalPool`的析构，而`ThreadLocalPool`析构的时候又会使用到`ThreadLocalCluster`，但是`ThreadLocalCluster`已经析构了，这个时候就会出现野指针的问题了。
 
 ```cpp
-InstanceImpl::ThreadLocalPool::ThreadLocalPool(InstanceImpl& parent, 
-											   Event::Dispatcher& dispatcher, 
-											   const std::string& cluster_name)
+InstanceImpl::ThreadLocalPool::ThreadLocalPool(InstanceImpl& parent, Event::Dispatcher& dispatcher, const std::string& cluster_name)
     : parent_(parent), dispatcher_(dispatcher), 
 cluster_(parent_.cm_.get(cluster_name)) {
   .....
