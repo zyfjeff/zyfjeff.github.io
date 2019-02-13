@@ -264,7 +264,8 @@ fn apply_to_3<F>(f: F) -> i32 where
 * borrowing
 
 1. When data is immutably borrowed, it also freezes. Frozen data can't be modified via the original object until all references to it go out of scope:
-2. Data can be immutably borrowed any number of times, but while immutably borrowed, the original data can't be mutably borrowed. On the other hand, only one mutable borrow is allowed at a time. The original data can be borrowed again only after the mutable reference goes out of scope
+2. Data can be immutably borrowed any number of times, but while immutably borrowed, the original data can't be mutably borrowed.
+On the other hand, only one mutable borrow is allowed at a time. The original data can be borrowed again only after the mutable reference goes out of scope
 
 ```
 fn main() {
@@ -295,11 +296,75 @@ function signatures with lifetimes have a few constraints:
 
 * Diverging functions 偏离函数就是返回值是`!`的函数
 * `#![no_std]` 禁用rust std标准库
-* `#[panic_handler]` 自定义panic hook函数
-* `Copy trait`本质上实现是添加了 `#[lang = "copy"]`编译器属性，eh_personality则是用来告诉编译器实现栈解旋
+* `#[panic_handler]` 自定义panic hook函数，标准库提供了默认版本
+
+```
+use core::panic::PanicInfo;
+
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+  //....
+}
+```
+* `-C panic|unwind` 通过编译选项来关闭(通过panic来替代)或者启用栈解旋，或者通过cargo来开启
+
+```
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+```
+
+* C运行时启动后调用crt0，然后调用rust的运行时(标记为start language item)，rust运行时最后再调用main函数
+* `no_mangle`关闭name mangling
+* `-C link-arg=-nostartfiles` 链接的时候不链接libc运行时
+* `#![no_main]`覆盖entry point，Linux下可以用如下凡事定义新的entry point
+
+```
+#[no_mangle]
+// extern "C" 用于告诉编译器，按照C的调用约定来进行函数调用
+pub extern "C" fn _start() -> ! {
+    loop {}
+}
+```
+
+* `--target` 指定编译的平台，`CPU架构`、`vendor`、`OS`、`ABI`等，下面是一个target的例子。
+
+```
+{
+    "llvm-target": "x86_64-unknown-none",
+    "data-layout": "e-m:e-i64:64-f80:128-n8:16:32:64-S128",
+    "arch": "x86_64",
+    "target-endian": "little",
+    "target-pointer-width": "64",
+    "target-c-int-width": "32",
+    "os": "none",
+    "executables": true,
+}
+```
+
+* `Copy trait`本质上实现是添加了 `#[lang = "copy"]`编译器属性
 * `#[repr(u8)]` 指定enum使用`u8`类型来存储
+* `eh_personality`用于实现栈解旋，是一个language item，
 * `#[derive(Debug, Clone, Copy, PartialEq, Eq)]` 开启Copy语义
 * `repr(C)` 让rust中的struct字段顺序和C中的struct一致
+* `core::fmt::Write` Traits 需要实现`fn write_str(&mut self, s: &str) -> fmt::Result`方法，可以调用`write!`宏，写入格式化字符串
+* `#[macro_export]`把定义的宏暴露出去，所有的crate都可以使用，属于root namesapce
+* `#[doc(hidden)]` 不给public的function生成文档信息
+* cargo中可以定义section `dev-dependencies`用来只在开发截断才依赖的crate
+* rust条件编译来确定属性`#![cfg_attr(not(test), no_main)]`、`#[cfg(not(test))]`、`#![cfg_attr(test, allow(unused_imports))]`等
+* 数组构造的时候要求类型是Copy语义的`array construction in Rust requires that the contained type is Copy`
+* 通过`array_init`可以让数组构造不是Copy语义的类型。
+* `#[repr(transparent)]`确保struct和内部的类型是一致的内存布局
+
+```
+// 确保ColorCode和u8是一样的内存布局
+#[repr(transparent)]
+struct ColorCode(u8);
+```
 
 ## Link
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)
+* [System V ABI read zone](https://os.phil-opp.com/red-zone/)
+* [disbale SIMD](https://os.phil-opp.com/disable-simd/)
