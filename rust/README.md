@@ -357,6 +357,7 @@ pub extern "C" fn _start() -> ! {
 * 数组构造的时候要求类型是Copy语义的`array construction in Rust requires that the contained type is Copy`
 * 通过`array_init`可以让数组构造不是Copy语义的类型。
 * `#[repr(transparent)]`确保struct和内部的类型是一致的内存布局
+* `volatile`crate库用于避免编译器的优化，对于一段内存，如果只有写没有读，编译器可能会把写操作给优化掉。
 
 ```
 // 确保ColorCode和u8是一样的内存布局
