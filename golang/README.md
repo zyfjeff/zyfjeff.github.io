@@ -90,7 +90,7 @@ type Person struct {
 
 > Do not enable more than one kind of profile at a time.
 
-关闭CPU变频，是CPU始终处于高频
+关闭CPU变频，使CPU始终处于高频
 ```
 $ sudo bash
 # for i in /sys/devices/system/cpu/cpu[0-7]
@@ -100,7 +100,22 @@ do
 #
 ```
 6.  `--inuse_objects `显示分配的内存数量而不是大小
+7. pprof 基本使用(cpuprofile)
 
+```
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
+func main() {
+    flag.Parse()
+    if *cpuprofile != "" {
+        f, err := os.Create(*cpuprofile)
+        if err != nil {
+            log.Fatal(err)
+        }
+        pprof.StartCPUProfile(f)
+        defer pprof.StopCPUProfile()
+    }
+```
 
 ## Concurrency
 

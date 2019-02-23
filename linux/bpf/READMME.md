@@ -36,3 +36,43 @@ eBPF载入程序后会进行深度搜索CFG来检测，如果发现不可达的�
   6. Value and alignment tracking for data access (pkt pointer, map access)
   7. Register liveness analysis for pruning
   8. State pruning for reducing verification complexity
+
+
+## bcc
+
+```python
+// 1. 第一种形式
+BPF(text="BPF程序代码").trace_print()
+
+// 2. 第二种形式
+b = BPF(text="BPF程序代码")
+b.attach_kprobe(event="syscall名称", fn_name = "回调BPF程序代码中对应名称的函数")
+b.trace_fields() //将输出信息按照字段分割的形式输出  (task, pid, cpu, flags, ts, msg)
+
+```
+
+1. `bpf_ktime_get_ns` 获取当前时间，单位是nanoseconds
+2. `BPF_HASH(last)` 创建名为last的关联数组，如果没有指定额外参数的化，key和value的类型都是u64
+3. `last.lookup(&key)` 查询key是否在hash中，不在就返回NULL
+4. `last.delete(&key)` 从hash中删除key
+5. `last.update(&key, &value)` 更新数据
+6. `bpf_trace_printk` bpf程序输出
+7. bpf程序中所有要运行的函数，其第一个参数都需要是`struct pt_regs*`
+8. `bpf_get_current_pid_tgid` 返回进程PID
+9. `bpf_get_current_comm` 获取当前程序名称
+10. `BPF_PERF_OUTPUT(events)` 定义输出的channel名称
+11. `events.perf_submit()` 提交event到用户空间
+12. `b["events"].open_perf_buffer(print_event)` 把输出函数和输出的channel关联起来
+13. `b.perf_buffer_poll()` 阻塞等待events
+14. `BPF_HISTOGRAM`定义BPF Map对象，这是一个histogram(dist.increment()bucket递增)
+15. `bpf_log2l` 返回log2函数计算的结果。
+16. `b["dist"].print_log2_hist("kbytes")` 按照log2作为key，kbytes作为header，打印dist这个histogram中的数据
+17. `attach_kretprobe` attach到一个内核函数的`return`点
+18. `BPF(src_file = "vfsreadlat.c")` 从源码中读取BPF程序
+19. `attach_uprobe` attach到一个uprobe
+20. `PT_REGS_PARM1` 获取到要trace的函数中的第一个参数
+21. `bpf_usdt_readarg(6, ctx, &addr)` 读取USDT probe的第六个参数到addr变量中
+22. `bpf_probe_read(&path, sizeof(path), (void *)addr)` 将addr指向path变量
+23. `USDT(pid=int(pid))` 对指定PID开启USDT tracing功能
+24. `enable_probe(probe="http__server__request", fn_name="do_trace")` attach do_trace函数到Node.js的`http__server__request` USDT probe
+25. `BPF(text=bpf_text, usdt_contexts=[u])` 将USDT对象u传递给BPF对象

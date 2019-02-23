@@ -48,13 +48,135 @@ refFold<int&>(0); # compile error
 
 ## 强类型
 
-
 参考文章:
 1. https://www.fluentcpp.com/2016/12/05/named-constructors/
 2. https://foonathan.net/blog/2016/10/19/strong-typedefs.html
 
 
-## 在析狗函数中调用const成员函数
+## 转发引用
+所谓转发，就是通过一个函数将参数继续转交给另一个函数进行处理，原参数可能是右值，可能是左值，如果还能继续保持参数的原有特征，那么它就是完美的。
+什么是原有特征呢? C++主要有两类，一类就是CV限制符号(const/non const)，另外一类就是左值/右值，完美转发指的就是在参数传递过程中，这两组属性不变。
+说到转发引用，有两个术语来表示，第一个是forwarding reference，另外一个则是univeral refernence，需要配合模版一起才能被称之为转发引用，其形式如下:
+
+```
+template <typename T>
+void f(T &&t) {
+  g(std::forward<T>(t));
+}
+
+template <typename... Args>
+void f(Args&&... args) {
+  g(std::forward<Args>(args)...);
+}
+```
+其他任何形式都不能称之为转发引用，即使只是添加了一个CV限制符。
+
+## 函数模版无法偏特化，只能全特化
+
+## extern template 声明
+
+
+## 模版模版参数
+
+```cpp
+#include <vector>
+#include <iostream>
+
+template <class T, template <class...> class C, class U>
+C<T> cast_all(const C<U> &c) {
+        C<T> result(c.begin(), c.end());
+  return result;
+}
+
+int main() {
+        std::vector<float> vf = {1.2, 2.6, 3.78};
+        // 传入一个模版类型，自动推导出模版的类型。
+        auto vi = cast_all<int>(vf);
+
+        for (auto &&i : vi) {
+                std::cout << i << std::endl;
+        }
+
+        return 0;
+}
+```
+
+## 可变参数模版
+Start with the general (empty) definition, which also serves as the base-case for recrusion termination in the later specialisation:
+
+```
+template<typename ... T>
+struct DataStructure {};
+
+template<typename T, typename ... Reset>
+struct DataStructure<T, Reset ...> {
+  DataStructure(const T& first, const Reset& ... reset)
+    : first(first)
+    , reset(reset...) {}
+  T first;
+  DataStructure<Reset ... > reset;
+};
+
+// 解开的过程大致如下:
+DataStructure<int, float>
+   -> int first
+   -> DataStructure<float> rest
+         -> float first
+         -> DataStructure<> rest
+            -> (empty)
+
+对于如下这样的模版，想要获取第三个元素则通过data.reset.reset.first来获取
+DataStructure<int, float, std::string>
+
+为了简化上述的获取过程，可以写一些helper函数来辅助完成
+
+template<typename T, typename ... Rest>
+struct DataStructure<T, Rest ...> {
+  ...
+  template<size_t idx>
+  auto get() {
+      return GetHelper<idx, DataStructure<T,Rest...>>::get(*this);
+  }
+  ...
+};
+
+template<typename T, typename ... Rest>
+struct GetHelper<0, DataStructure<T, Rest ... >> {
+  static T get(DataStructure<T, Rest...>& data) {
+      return data.first;
+  }
+};
+
+template<size_t idx, typename T, typename ... Rest>
+struct GetHelper<idx, DataStructure<T, Rest ... >> {
+  static auto get(DataStructure<T, Rest...>& data) {
+    return GetHelper<idx-1, DataStructure<Rest ...>>::get(data.rest);
+  }
+};
+
+```
+
+C++17中，可以简化可变模版参数展开的问题
+
+```cpp
+template <typename... Ts>
+void print_all(std::ostream& os, Ts const&... args) {
+  ((os << args), ...);
+}
+
+template <typename T, class... Ts>
+void print_all(std::ostream& os, T const& first, Ts const&... rest) {
+  os << first;
+  if constexpr (sizeof...(rest) > 0) {
+    print_all(os, rest...);
+  }
+}
+
+```
+
+Ref: `code/variadic_template/variadic.cc`
+
+## 在析构函数中调用const成员函数
 
 const and volatile semantics (7.1.6.1) are not applied on an object under destruction.
 They stop being in effect when the destructor for the most derived object (1.8) starts.

@@ -356,9 +356,26 @@ pub extern "C" fn _start() -> ! {
 * rust条件编译来确定属性`#![cfg_attr(not(test), no_main)]`、`#[cfg(not(test))]`、`#![cfg_attr(test, allow(unused_imports))]`等
 * 数组构造的时候要求类型是Copy语义的`array construction in Rust requires that the contained type is Copy`
 * 通过`array_init`可以让数组构造不是Copy语义的类型。
-* `#[repr(transparent)]`确保struct和内部的类型是一致的内存布局
 * `volatile`crate库用于避免编译器的优化，对于一段内存，如果只有写没有读，编译器可能会把写操作给优化掉。
+* `Box::leak`用于将消费Box::new创建出来的智能指针，并返回`'a mut`指针
+* 数组的构造需要其类型是Copy语义的，为了解决这个问题需要用到`array-init` crate
 
+```
+// Volatile 是Non-Copy的类型
+struct Buffer {
+    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
+}
+
+fn construct_buffer() -> Buffer {
+  use array_init::array_init;
+
+  Buffer {
+      chars: array_init(|_| array_init(|_| Volatile::new(empty_char()))),
+  }
+}
+```
+
+* `#[repr(transparent)]`确保struct和内部的类型是一致的内存布局
 ```
 // 确保ColorCode和u8是一样的内存布局
 #[repr(transparent)]
