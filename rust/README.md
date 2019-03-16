@@ -382,6 +382,36 @@ fn construct_buffer() -> Buffer {
 struct ColorCode(u8);
 ```
 
+* 测试panic的场景
+
+```
+    #[should_panic]
+    // or use:
+    #[should_panic(expected = "Some message")]
+    fn it_works2() {
+    }
+```
+
+* 输出测试输出内容
+
+1. `cargo test -- --color always --nocapture`
+2. `cargo test -- --nocapture`
+3. `set RUST_TEST_NOCAPTURE=1`
+
+* 自定义ERROR
+
+```rust
+#[derive(Debug, PartialEq)]
+pub enum UUIDError {
+    InvalidChar(char),
+    InvalidGroupCount(usize),
+    InvalidLength(usize),
+    InvalidGroupLength(u8),
+}
+
+type Result<T> = result::Result<T, UUIDError>;
+```
+
 ## Link
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)
 * [System V ABI read zone](https://os.phil-opp.com/red-zone/)

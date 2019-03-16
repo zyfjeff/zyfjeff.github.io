@@ -2,6 +2,7 @@
 
 ```
 sudo mount -t debugfs nodev /sys/kernel/debug/
+sudo bash -c "echo 1 > /sys/kernel/debug/tracing/tracing_on"
 ```
 
 ## trace cmd
@@ -34,7 +35,7 @@ git://git.kernel.org/pub/scm/linux/kernel/git/rostedt/trace-cmd.git
 # echo function > current_tracer
 # cat trace
 
-// dittio
+// ditto
 # trace-cmd start -p function
 # trace-cmd show
 
@@ -54,6 +55,7 @@ git://git.kernel.org/pub/scm/linux/kernel/git/rostedt/trace-cmd.git
 # set_ftrace_notrace  // 不对列在其中的函数进行tracing，会覆盖set_ftrace_filter中的内容
 # available_filter_functions  // 列出可以加入到上述文件中的函数列表
 # set_graph_function // 对指定函数，生成function graph
+# max_graph_depth
 ```
 
 ## Function triggers
@@ -67,3 +69,8 @@ trigger:
   4. dump
   5. cpudump
   6. enable_event/disable_event
+
+
+## uprobe tracer
+
+https://www.kernel.org/doc/html/v4.17/trace/uprobetracer.html

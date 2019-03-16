@@ -73,7 +73,7 @@ void f(Args&&... args) {
 
 ## 函数模版无法偏特化，只能全特化
 
-## extern template 声明
+## extern template
 
 
 ## 模版模版参数
@@ -104,7 +104,7 @@ int main() {
 ## 可变参数模版
 Start with the general (empty) definition, which also serves as the base-case for recrusion termination in the later specialisation:
 
-```
+```cpp
 template<typename ... T>
 struct DataStructure {};
 
@@ -175,6 +175,100 @@ void print_all(std::ostream& os, T const& first, Ts const&... rest) {
 ```
 
 Ref: `code/variadic_template/variadic.cc`
+
+## Iterators
+
+通过rbegin、rend返回的是反向迭代器reverse_iterator，通过其base方法可以转换为正向迭代器
+
+```cpp
+std::vector<int>::reverse_iterator r = v.rbegin();
+std::vector<int>::iterator i = r.base();
+assert(&*r == &*(i - 1));
+```
+
+std::istream_iterator 输入迭代器
+std::ostream_iterator 输出迭代器
+
+```cpp
+// 会忽略空白字符
+std::istringstream istr("1\t 2   3 4");
+std::vector<int> v;
+
+std::copy(
+  std::istream_iterator<int>(istr),
+  std::istream_iterator<int>(),
+  std::back_inserter(v));
+
+std::copy(v.begin(), v.end(),
+  std::ostream_iterator<int>(std::cout, " -- "));
+```
+
+自定义迭代器
+
+
+## type traits
+
+* `std::conditional` 类似于三目运算符，根据编译期条件来选择
+
+```cpp
+template<typename T>
+struct ValueOfPointer {
+  typename std::conditional<(sizeof(T) > sizeof(void*), T*, T>::type vop;
+}
+```
+
+* `std::common_type` 获取多个类型之间都可以隐式转换到的共同类型
+
+```cpp
+// 通过std::common_type获取T1和T2的共同类型作为返回值的类型
+template <typename T1, typename T2>
+auto min(const T1 &a, const T2 &b) -> typename std::common_type<const T1&, const T2&>::type {
+  return a < b ? a : b;
+}
+```
+
+* `std::declval` 不论类型的构造函数如何都可以通过这个traits获取到这个类型的一个对象的引用实例，常和`decltype`结合使用
+
+```cpp
+#include <utility>
+#include <iostream>
+
+struct Default { int foo() const { return 1; } };
+
+struct NonDefault
+{
+    NonDefault(const NonDefault&) { }
+    int foo() const { return 1; }
+};
+
+int main()
+{
+    decltype(Default().foo()) n1 = 1;                   // type of n1 is int
+//  decltype(NonDefault().foo()) n2 = n1;               // error: no default constructor
+    decltype(std::declval<NonDefault>().foo()) n2 = n1; // type of n2 is int
+    std::cout << "n1 = " << n1 << '\n'
+              << "n2 = " << n2 << '\n';
+}
+```
+
+* `std::iterator_traits`获取迭代器的分类，可以知道这个迭代器的值类型、是哪个类别等信息
+
+```cpp
+template < typename BidirIt>
+void test(BidirIt a, std::bidirectional_iterator_tag) {
+  std::cout << "bidirectional_iterator_tag is used" << std::endl;
+}
+
+template < typename ForwIt>
+void test(ForwIt a, std::forward_iterator_tag) {
+  std::cout << "Forward iterator is used" << std::endl;
+}
+
+template < typename Iter>
+void test(Iter a) {
+  test(a, std::iterator_traits<Iter>::iterator_category());
+}
+```
 
 ## 在析构函数中调用const成员函数
 
@@ -387,3 +481,53 @@ struct crtp {
   friend crtpType<T>;
 };
 ```
+
+
+## Mock技巧
+
+1. Mock `ClassA::Create()`
+
+
+``` cpp
+
+class AInterface;
+
+class A : public A::AInterface {
+ public:
+  static std::unique_ptr<A::AInterface> Create();
+};
+
+class B {
+ public:
+  void Method() {
+    a_ = A::Create();
+  }
+ private:
+  std::unique_ptr<A::AInterface> a_;
+}
+```
+
+上面的类A通过静态方法创建实例，现在想要测试B，需要把A Mock掉。可以通过下面这种方式来Mock
+
+```cpp
+class B {
+ public:
+  void Method() {
+    a_ = Create();
+  }
+  virtual std::unique_ptr<A::AInterface> Create();
+ private:
+  std::unique_ptr<A::AInterface> a_;
+};
+
+class ProdB : public B {
+ public:
+  virtual std::unique_ptr<A::AInterface> Create() override {
+    return A::Create();
+  }
+};
+```
+
+## 线程/进程模型总结
+
+## 网络模型总结
