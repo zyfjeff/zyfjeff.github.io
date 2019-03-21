@@ -70,6 +70,13 @@ He is my teacher
 他是谁: Who is he?
 谁是我的老师: Who is my teacher?
 
+My book is on the table?
+我的书在哪里? Where is my book?
+什么在桌子上面? What is on the table?
+
+You are French?
+谁是法国人: Who is French? (who是第三人称单数)
+
 Hey、Hi、Hello 问好
 
 How is your mother?
@@ -86,3 +93,86 @@ Look at... 看...
 I see him in the street
 A fat cat 暴发户
 The girl is very hot 这个女孩非常性感
+
+## 冠词
+待在名词上的帽子，没有特殊情况不能摘帽子
+
+特殊情况：国家、国籍、人名、城市名
+
+an、a、the等
+the后面接辅音和元音其读音不同
+
+
+## 名词所有格
+
+一种所属关系
+
+1. 名词's + 名词
+This is Mike's car
+That is Tom's watch
+This is the boy's father
+That is Mary's dress
+That is the bird's song
+
+2. 名词(s) 发音/z/
+  * 名词(s)'s + 名词
+  * 名词(s)'s book
+
+Tomas's book or Tomas' book
+Jones's car or Jones' car
+Hopkins's bike or Hopkins' bike
+
+3. 名词(s) 复数
+名词(s)'s + 名词
+
+The teachers' reading-room
+
+4. 名词's + 名词(可省略)
+名词's
+
+This shirt is Tim's shirt.
+This shirt is Tim's
+
+Is this shirt Tim's?
+
+
+## 形容性物主代词
+后面必须加名词
+my、your、his、her、its、our、your、their
+
+This is my father
+
+
+Perhaps so 也许会
+Perhaps not 也许不会
+形容词可以放在名词前、或者系动词后做表语
+snow white 白雪公主
+catch the ball 接球
+catch the fish 捕鱼
+catch the chief 抓小偷
+
+
+
+
+a green hand 新手
+Come and see me 来见我
+Come and do it
+Come and sit down
+Come and meet my mom
+Here it is
+Here we go...
+
+Here + 主语 + 动词
+Here I am 我在这
+
+
+## 句型
+
+1. What colour's your....?
+2. Is this your shirt?
+3. Look at...
+4. Are you a teacher?
+5. How are you today?
+6. Nice to meet you
+7. What make is it?
+8. What's your job?

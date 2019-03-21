@@ -117,11 +117,28 @@ func main() {
     }
 ```
 
+## Programing Pattern
+
+* 触发信号后，程序退出
+
+程序通过一个stop信号来控制程序的生命的周期，在程序的最后调用WaitSignal来等待信号到来。
+
+```golang
+// WaitSignal awaits for SIGINT or SIGTERM and closes the channel
+func WaitSignal(stop chan struct{}) {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	<-sigs
+	close(stop)
+	_ = log.Sync()
+}
+```
+
 ## Concurrency
 
 * sync.Pool
 
-```cpp
+```golang
 
 myPool := &sync.Pool{
     // 自定义对象的创建
@@ -137,7 +154,6 @@ myPool.Get()
 instance := myPool.Get()
 // 将创建的对象放到Pool中复用
 myPool.Put(instance)
-myPool.Get()
 ```
 
 * `runtime.GOMAXPROCS(runtime.NumCPU())` 指的是OS线程数，就是M的角色

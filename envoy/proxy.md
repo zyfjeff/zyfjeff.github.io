@@ -8,16 +8,18 @@
 1. `--disable-hot-restart` 关闭热重启，避免使用共享内存存放stats统计信息
 2. `--concurrency` 和绑定的核心数一致，避免多个CPU切换导致cache失效
 3. 关闭stats统计和添加自定义header
-```
+
+```yaml
 http_filters:
 - name: envoy.router
   config:
       dynamic_stats: false
       suppress_envoy_headers: false
 ```
+
 4. 关闭circuit_breakers
 
-```
+```yaml
 circuit_breakers:
   thresholds:
   - priority: HIGH
@@ -27,9 +29,6 @@ circuit_breakers:
     max_retries: 1000000000
 ```
 
-## 硬件篇
-AVX2指令集支持，
-
 
 # listener filter
 作用在listen socket上，当有连接到来的时候，通过libevent会触发可读事件，调用listen socket的accept获取到连接socket封装为ConnectionSocket，
@@ -38,6 +37,10 @@ AVX2指令集支持，
 1. 创建filter chain
 2. continueFilterChain 调用filter chain
 3. 如果有filter返回了StopIteration，那么就开启timer，在这个时间内还没有继续continue就直接关闭当前socket
+4. filter返回StopIteration后，要继续运行剩下的filter可以回调continueFilterChain
+
+> 比如proxy_protocol这个listener filter当接收到一个filter后会注册读事件，从socket读取proxy协议头，所以会返回StopIteration
+> 等到有数据可读的时候，并且读到了协议头才会回调continueFilterChain继续执行下面的filter
 
 ```cpp
 void ConnectionHandlerImpl::ActiveListener::onAccept(
@@ -52,8 +55,23 @@ void ConnectionHandlerImpl::ActiveListener::onAccept(
   // Move active_socket to the sockets_ list if filter iteration needs to continue later.
   // Otherwise we let active_socket be destructed when it goes out of scope.
   if (active_socket->iter_ != active_socket->accept_filters_.end()) {
+    // 启动了一个timer，避免filter长时间不调用
     active_socket->startTimer();
     active_socket->moveIntoListBack(std::move(active_socket), sockets_);
+  }
+}
+
+// 如果超时就从socket list中移除当前socket
+void ConnectionHandlerImpl::ActiveSocket::onTimeout() {
+  listener_.stats_.downstream_pre_cx_timeout_.inc();
+  ASSERT(inserted());
+  unlink();
+}
+
+void ConnectionHandlerImpl::ActiveSocket::startTimer() {
+  if (listener_.listener_filters_timeout_.count() > 0) {
+    timer_ = listener_.parent_.dispatcher_.createTimer([this]() -> void { onTimeout(); });
+    timer_->enableTimer(listener_.listener_filters_timeout_);
   }
 }
 ```
@@ -88,8 +106,8 @@ Network::FilterStatus OriginalDstFilter::onAccept(Network::ListenerFilterCallbac
 
   return Network::FilterStatus::Continue;
 ```
-Reference: https://www.kernel.org/doc/Documentation/networking/tproxy.txt
 
+Reference: https://www.kernel.org/doc/Documentation/networking/tproxy.txt
 
 
 ## original_src filter
@@ -284,3 +302,71 @@ Reference:
 ## Envoy生命周期callback
 
 https://github.com/envoyproxy/envoy/pull/6254
+
+
+## Envoy四层filter执行链
+
+1. Downstream连接建立后，开始创建filter，然后初始化filter
+2. 回调onNewConnection
+3. 回调onData
+
+```cpp
+bool FilterManagerImpl::initializeReadFilters() {
+  if (upstream_filters_.empty()) {
+    return false;
+  }
+  // 初始化完成后，开始从头开始执行filter
+  onContinueReading(nullptr);
+  return true;
+}
+
+// 传入的是nullptr的时候，从头开始执行filter的
+// 设置initialized_标志为true
+// 回调onNewConnection，如果是返回stop就停止运行了
+// 等待filter返回通过ReadFilterCallbacks回调onContinueReading来继续执行
+void FilterManagerImpl::onContinueReading(ActiveReadFilter* filter) {
+  std::list<ActiveReadFilterPtr>::iterator entry;
+  if (!filter) {
+    entry = upstream_filters_.begin();
+  } else {
+    entry = std::next(filter->entry());
+  }
+
+  for (; entry != upstream_filters_.end(); entry++) {
+    if (!(*entry)->initialized_) {
+      (*entry)->initialized_ = true;
+      FilterStatus status = (*entry)->filter_->onNewConnection();
+      if (status == FilterStatus::StopIteration) {
+        return;
+      }
+    }
+
+    BufferSource::StreamBuffer read_buffer = buffer_source_.getReadBuffer();
+    if (read_buffer.buffer.length() > 0 || read_buffer.end_stream) {
+      FilterStatus status = (*entry)->filter_->onData(read_buffer.buffer, read_buffer.end_stream);
+      if (status == FilterStatus::StopIteration) {
+        return;
+      }
+    }
+  }
+}
+```
+
+Example:
+有三个filter、其中任何一个filter其中的一个callback返回StopIteration那么整个流程就停止了，需要等待调用onContinueReading才能继续
+执行下一个callback方法。
+
+FilterA::onNewConnection
+FilterA::onData
+
+FilterB::onNewConnection
+FilterB::onData
+
+FilterC::onNewConnection
+FilterC::onData
+
+执行顺序为:
+FilterA::onNewConnection->FilterA::onData->FilterB::onNewConnection->FilterB::onData->FilterC::onNewConnection->FilterC::onData
+任何一个callback返回StopIteration整个流程就不会继续往下走了，需要等待对应的filter回调onContinueReading，这样就会带来一个问题，一旦停止filter chain
+继续往下走，那么网络层依然会收数据存在内部buffer里面，这会导致内存上涨，因此TCP PROXY中会在调用onNewConnection的时候先关闭读，然后和upstream建立连接
+连接建立后才会开启读，防止内存被打爆。
