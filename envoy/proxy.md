@@ -29,6 +29,82 @@ circuit_breakers:
     max_retries: 1000000000
 ```
 
+# listener
+
+```json
+{
+  "name": "...",
+  "address": "{...}",
+  // listener filter
+  "filter_chains": [],
+  // 废弃了，改用original dst filter
+  "use_original_dst": "{...}",
+  // 设置writer buffer的大小限制，这个指的是envoy忘downstream、或者往upstream写入数据的buffer大小
+  "per_connection_buffer_limit_bytes": "{...}",
+  "metadata": "{...}",
+  // listener何时析构，默认在listener的移除和修改、还有热重启、/healthcheck/fail的时候
+  // 也可以设置为仅仅在listener的移除和修改、还有热重启的时候析构
+  "drain_type": "...",
+  // listener filter
+  "listener_filters": [],
+  "listener_filters_timeout": "{...}",
+  //
+  "transparent": "{...}",
+  // 可以监听在一个非本地ip上，通常配置original dst filter来做listener的匹配
+  // 本质上就是给socket设置IP_FREEBIND option参数
+  "freebind": "{...}",
+  "socket_options": [],
+  // 第一次三次握手生成cookie后，第二次直接带着cookie就避免了三次握手。
+  // 这个参数用来设置FAST OPEN的队列长度。
+  // 就是设置socket的TCP_FASTOPEN option参数
+  "tcp_fast_open_queue_length": "{...}"
+}
+```
+
+* `per_connection_buffer_limit_bytes`
+
+```cpp
+void ConnectionHandlerImpl::ActiveListener::newConnection(Network::ConnectionSocketPtr&& socket) {
+  // Find matching filter chain.
+  const auto filter_chain = config_.filterChainManager().findFilterChain(*socket);
+  if (filter_chain == nullptr) {
+    ENVOY_LOG_TO_LOGGER(parent_.logger_, debug,
+                        "closing connection: no matching filter chain found");
+    stats_.no_filter_chain_match_.inc();
+    socket->close();
+    return;
+  }
+
+  auto transport_socket = filter_chain->transportSocketFactory().createTransportSocket(nullptr);
+  // 创建连接后，设置buffer limit
+  Network::ConnectionPtr new_connection =
+      parent_.dispatcher_.createServerConnection(std::move(socket), std::move(transport_socket));
+  new_connection->setBufferLimits(config_.perConnectionBufferLimitBytes());
+
+  const bool empty_filter_chain = !config_.filterChainFactory().createNetworkFilterChain(
+      *new_connection, filter_chain->networkFilterFactories());
+  if (empty_filter_chain) {
+    ENVOY_CONN_LOG_TO_LOGGER(parent_.logger_, debug, "closing connection: no filters",
+                             *new_connection);
+    new_connection->close(Network::ConnectionCloseType::NoFlush);
+    return;
+  }
+
+  onNewConnection(std::move(new_connection));
+}
+
+void ConnectionImpl::setBufferLimits(uint32_t limit) {
+  read_buffer_limit_ = limit;
+  // 其实就是注册了一个writer buffer的水位回调
+  if (limit > 0) {
+    static_cast<Buffer::WatermarkBuffer*>(write_buffer_.get())->setWatermarks(limit + 1);
+  }
+}
+```
+
+
+Reference: http://man7.org/linux/man-pages/man7/ip.7.html
+
 
 # listener filter
 作用在listen socket上，当有连接到来的时候，通过libevent会触发可读事件，调用listen socket的accept获取到连接socket封装为ConnectionSocket，
@@ -108,9 +184,83 @@ Network::FilterStatus OriginalDstFilter::onAccept(Network::ListenerFilterCallbac
 ```
 
 Reference: https://www.kernel.org/doc/Documentation/networking/tproxy.txt
-
+TODO(tianqian.zyf): 例子
 
 ## original_src filter
+
+L3/L4 transparency的含义: L3要求源IP可见、L4要求端口可见，这个filter的目的是将原地址信息透传到upstream，让upstream可以
+获取到真实的源IP和端口信息。
+
+TODO(tianqian.zyf): 例子
+
+Reference: https://github.com/envoyproxy/envoy/pull/5255
+Reference: https://docs.google.com/document/d/1md08XUBfVG9FwPUZixhR3f77dFRCVGJz2359plhzXxo/edit
+
+
+## proxy_protocol filter
+建立连接后发送一段数据来传递源地址和端口信息。
+
+```cpp
+// 连接建立后，开始注册读事件，读取传递过来的数据。
+Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
+  ENVOY_LOG(debug, "proxy_protocol: New connection accepted");
+  Network::ConnectionSocket& socket = cb.socket();
+  ASSERT(file_event_.get() == nullptr);
+  file_event_ =
+      cb.dispatcher().createFileEvent(socket.ioHandle().fd(),
+                                      [this](uint32_t events) {
+                                        ASSERT(events == Event::FileReadyType::Read);
+                                        onRead();
+                                      },
+                                      Event::FileTriggerType::Edge, Event::FileReadyType::Read);
+  cb_ = &cb;
+  return Network::FilterStatus::StopIteration;
+}
+
+void Filter::onRead() {
+  try {
+    onReadWorker();
+  } catch (const EnvoyException& ee) {
+    config_->stats_.downstream_cx_proxy_proto_error_.inc();
+    cb_->continueFilterChain(false);
+  }
+}
+
+// 读取proxy头，这里的读取是通过ioctl(fd, FIONREAD, &bytes_avail) 来获取缓存中的数据大小 ,
+// 然后通过MSG_PEEK的方式查看数据。并不是直接read，因为一旦不是proxy ptorocol协议头会导致数据不完整(被读走了)。
+
+void Filter::onReadWorker() {
+  Network::ConnectionSocket& socket = cb_->socket();
+
+  if ((!proxy_protocol_header_.has_value() && !readProxyHeader(socket.ioHandle().fd())) ||
+      (proxy_protocol_header_.has_value() && !parseExtensions(socket.ioHandle().fd()))) {
+    // We return if a) we do not yet have the header, or b) we have the header but not yet all
+    // the extension data. In both cases we'll be called again when the socket is ready to read
+    // and pick up where we left off.
+    return;
+  }
+  ....
+  // 读取完成后，拿到获取的源地址信息进行操作。
+
+  // Only set the local address if it really changed, and mark it as address being restored.
+  if (*proxy_protocol_header_.value().local_address_ != *socket.localAddress()) {
+    socket.restoreLocalAddress(proxy_protocol_header_.value().local_address_);
+  }
+  socket.setRemoteAddress(proxy_protocol_header_.value().remote_address_);
+  ....
+}
+```
+TODO(tianqian.zyf): 例子
+Reference: https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt
+
+## TLS Inspector filter
+
+TLS Inspector listener filter allows detecting whether the transport appears to be TLS or plaintext, and if it is TLS, it detects the Server Name Indication and/or Application-Layer Protocol Negotiation from the client. This can be used to select a FilterChain via the server_names and/or application_protocols of a FilterChainMatch.
+
+
+1. 注册读数据，等待数据到来
+2. 解析Client hello报文
+3. 找到TLS信息，设置TransportSocket为Tls
 
 
 ## data sharing between filters
@@ -370,3 +520,117 @@ FilterA::onNewConnection->FilterA::onData->FilterB::onNewConnection->FilterB::on
 任何一个callback返回StopIteration整个流程就不会继续往下走了，需要等待对应的filter回调onContinueReading，这样就会带来一个问题，一旦停止filter chain
 继续往下走，那么网络层依然会收数据存在内部buffer里面，这会导致内存上涨，因此TCP PROXY中会在调用onNewConnection的时候先关闭读，然后和upstream建立连接
 连接建立后才会开启读，防止内存被打爆。
+
+
+## Overload manager
+
+核心概念:
+
+1. ResourceMonitors 内置了一系列要监控的资源，目前有的是FixedHeap
+
+2. OverloadAction 触发资源的限制的后，可以进行的一系列action，提供了isActive来表明当前Action是否有效(有Trigger就是有效的)
+
+  * envoy.overload_actions.stop_accepting_requests
+  * envoy.overload_actions.disable_http_keepalive
+  * envoy.overload_actions.stop_accepting_connections
+  * envoy.overload_actions.shrink_heap
+
+3. Trigger 每一个OverloadAction会包含一个触发器，里面设置了阀值，提供了isFired来表明当前触发器是否触发了
+
+Setp1: 实现核心接口
+
+```cpp
+class ResourceMonitor {
+public:
+  virtual ~ResourceMonitor() {}
+  class Callbacks {
+  public:
+    virtual ~Callbacks() {}
+    virtual void onSuccess(const ResourceUsage& usage) = 0;
+    virtual void onFailure(const EnvoyException& error) = 0;
+  };
+  virtual void updateResourceUsage(Callbacks& callbacks) = 0;
+```
+
+每一类资源需要去实现这个接口，例如:FixedHeap
+
+```cpp
+class FixedHeapMonitor : public Server::ResourceMonitor {
+public:
+  FixedHeapMonitor(
+      const envoy::config::resource_monitor::fixed_heap::v2alpha::FixedHeapConfig& config,
+      std::unique_ptr<MemoryStatsReader> stats = std::make_unique<MemoryStatsReader>());
+
+  void updateResourceUsage(Server::ResourceMonitor::Callbacks& callbacks) override;
+
+private:
+  const uint64_t max_heap_;
+  std::unique_ptr<MemoryStatsReader> stats_;
+};
+```
+
+Setp2: 定期回调updateResourceUsage
+
+OverloadManagerImpl初始化的时候，会对各种资源的Monitor进行构造、以及OverloadAction等
+然后开始启动timer，定期回调updateResourceUsage接口，然后更新thread_local状态。
+
+```cpp
+
+void OverloadManagerImpl::start() {
+  ASSERT(!started_);
+  started_ = true;
+
+  tls_->set([](Event::Dispatcher&) -> ThreadLocal::ThreadLocalObjectSharedPtr {
+    return std::make_shared<ThreadLocalOverloadState>();
+  });
+
+  if (resources_.empty()) {
+    return;
+  }
+
+  timer_ = dispatcher_.createTimer([this]() -> void {
+    for (auto& resource : resources_) {
+      resource.second.update();
+    }
+
+    timer_->enableTimer(refresh_interval_);
+  });
+  timer_->enableTimer(refresh_interval_);
+}
+```
+
+
+## IP Transparency
+
+将Downstream的remote address传递到upstream
+
+1. HTTP Headers
+通过x-forwarded-for头，仅支持HTTP协议
+
+2. Proxy Protocol
+TCP建立连接的时候，将源地址信息传递过来，需要upstream的主机支持
+
+3. Original Source Listener Filter
+Envoy通过socket可以拿到远程的地址也可以借助Proxy Protocol拿到downstream的地址信息、然后把地址信息设置到upstream的socket中，upstream在返回的时候
+需要将其流量指向envoy，这里需要让Envoy和upstream部署在一起，然后使用iptables来完成。
+
+TODO(tianqian.zyf): 例子
+
+## istio-iptables.sh 分析
+
+* `-p` 指定envoy的端口，默认是15001，指的是拦截到的流量将导入到哪个端口，默认是15001
+* `-u` 指定UID，Effective UID等于指定的这个UID的程序流量不被拦截，默认是1337
+* `-g` 指定GID，Effective GID等于指定的这个GID的程序流量不被拦截，默认是1337
+* `-m` 指定流量拦截的模式，REDIRECT还是TPROXY
+* `-b` 指定哪些inbound的端口被重定向到Envoy中，多个端口按照逗号分割，默认是所有的流量。
+* `-d` 排除哪些inbound端口不进行流量的重定向
+* `-i` 指定IP CIDR进行outbound的流量重定向
+* `-x` 排查哪些IP不进行outbound的流量重定向
+* `-k` 从哪个虚拟口出去的流量被认为是outbound
+
+
+REDIRECT模式
+
+```
+
+```

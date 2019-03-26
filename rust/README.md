@@ -2,7 +2,7 @@
 
 * Format格式化输出
 
-```
+```rust
 /// nothing ⇒ Display
 /// ? ⇒ Debug
 /// x? ⇒ Debug with lower-case hexadecimal integers
@@ -52,7 +52,7 @@
 * Closure 默认是引用捕获，可以通过move来做take Ownership，但是实际上上并不一定是move，又可能是copy
 * Closure Traits
 
-```
+```rust
 pub trait Fn<Args> : FnMut<Args> {
     extern "rust-call"
       fn call(&self, args: Args) -> Self::Output;
@@ -69,7 +69,7 @@ pub trait FnOnce<Args> {
 ```
 * try!，遇到错误的时候提前return
 
-```
+```rust
 let socket1: TcpStream = try!(TcpStream::connect("127.0.0.1:8000"));
 // Is equivalent to...
 let maybe_socket: Result<TcpStream> =
@@ -83,7 +83,7 @@ let socket2: TcpStream =
 
 * Option::unwrap，方便了对Option 返回值的处理，但是如果是None会导致执行`panic`
 
-```
+```rust
 fn unwrap<T>(&self) -> T {
     match *self {
         None => panic!("Called `Option::unwrap()` on a `None` value"),
@@ -95,7 +95,7 @@ fn unwrap<T>(&self) -> T {
 
 * 为什么&String是&str?，因为String实现了Deref trait
 
-```
+```rust
 pub trait Deref {
     type Target: ?Sized;
     fn deref(&self) -> &Self::Target;
@@ -104,7 +104,7 @@ pub trait Deref {
 
 * String转&str，不能直接使用str，必须是&str，str是一个unsized的类型
 
-```
+```rust
 let addr = "192.168.0.1:3000".to_string();
 TcpStream::connect(&*addr);
 ```
@@ -115,7 +115,7 @@ TcpStream::connect(&*addr);
 
 * Trait object对象安全，只有是对象安全的trait才可以做动态多态，否则只能static dispatch
 
-```
+```rust
 A trait is object-safe if:
 1. It does not require that Self: Sized
 2. Its methods must not use Self
@@ -125,7 +125,7 @@ A trait is object-safe if:
 
 * 关联类型，和trait相关的类型
 
-```
+```rust
 // 避免这样，N和E在这里不应该是通用类型，而是一个和Graph相关的类型。
 trait Graph<N, E> {
     fn edges(&self, &N) -> Vec<E>;
@@ -146,7 +146,7 @@ impl Graph for MyGraph {
 
 * Rust中的范型可以指定满足那些Trait和C++20中的Concept一致
 
-```
+```rust
 // T需要有Clone trait
 fn cloning_machine<T: Clone>(t: T) -> (T, T) {
     (t.clone(), t.clone())
@@ -164,7 +164,7 @@ fn clone_and_compare<T: Clone + Ord>(t1: T, t2: T) -> bool {
 
 * match模式匹配的时候默认是值拷贝的方式，可以通过`ref`来创建引用或者是通过`ref mut`来创建可变的引用
 
-```
+```rust
   // 相应地，定义两个非引用的值，通过 `ref` 和 `mut` 可以取得引用。
   let value = 5;
   // 使用 `ref` 关键字来创建引用。
@@ -175,7 +175,7 @@ fn clone_and_compare<T: Clone + Ord>(t1: T, t2: T) -> bool {
 
 * 如果match是对一个引用进行模式匹配的化可以通过`*`来解引用，这样就可以通过值拷贝的方式来进行模式解耦
 
-```
+```rust
   // 获得一个 `i32` 类型的引用。`&` 表示获取一个引用。
   let reference = &4;
 
@@ -187,7 +187,7 @@ fn clone_and_compare<T: Clone + Ord>(t1: T, t2: T) -> bool {
 
 * 如果match是对一个引用进行模式匹配的化，可以使用值的方式、`ref`的方式来，`&`的方式来进行匹配
 
-```
+```rust
   let reference = &4;
 
   match reference {
@@ -202,7 +202,7 @@ fn clone_and_compare<T: Clone + Ord>(t1: T, t2: T) -> bool {
 
 * `match`匹配的时候，还可以额外添加`guard`来过滤
 
-```
+```rust
   let pair = (2, -2);
   println!("Tell me about {:?}", pair);
   match pair {
@@ -215,7 +215,7 @@ fn clone_and_compare<T: Clone + Ord>(t1: T, t2: T) -> bool {
 
 * `match`匹配的时候，如果匹配的是一系列的值时可以通过`@`来绑定匹配到的一系列值
 
-```
+```rust
 	let age: u32 = 15;
   match age {
     0 => println!("I'm not born yet I guess"),
@@ -227,7 +227,7 @@ fn clone_and_compare<T: Clone + Ord>(t1: T, t2: T) -> bool {
 
 * 使用`if let`可以用来进行模式匹配，避免使用match导致代码冗余
 
-```
+```rust
 let number = Some(7);
 
 if let Some(i) ==number {
@@ -239,7 +239,7 @@ if let Some(i) ==number {
 
 * 指定闭包进行变量捕获的方式
 
-```
+```rust
 Fn：闭包需要通过引用（&T）捕获
 FnMut：闭包需要通过可变引用（&mut T）捕获
 FnOnce：闭包需要通过值（T）捕获
@@ -267,7 +267,7 @@ fn apply_to_3<F>(f: F) -> i32 where
 2. Data can be immutably borrowed any number of times, but while immutably borrowed, the original data can't be mutably borrowed.
 On the other hand, only one mutable borrow is allowed at a time. The original data can be borrowed again only after the mutable reference goes out of scope
 
-```
+```rust
 fn main() {
     let mut _mutable_integer = 7i32;
 
@@ -298,7 +298,7 @@ function signatures with lifetimes have a few constraints:
 * `#![no_std]` 禁用rust std标准库
 * `#[panic_handler]` 自定义panic hook函数，标准库提供了默认版本
 
-```
+```rust
 use core::panic::PanicInfo;
 
 #[panic_handler]
@@ -306,9 +306,10 @@ fn panic(info: &PanicInfo) -> ! {
   //....
 }
 ```
+
 * `-C panic|unwind` 通过编译选项来关闭(通过panic来替代)或者启用栈解旋，或者通过cargo来开启
 
-```
+```rust
 [profile.dev]
 panic = "abort"
 
@@ -321,7 +322,7 @@ panic = "abort"
 * `-C link-arg=-nostartfiles` 链接的时候不链接libc运行时
 * `#![no_main]`覆盖entry point，Linux下可以用如下凡事定义新的entry point
 
-```
+```rust
 #[no_mangle]
 // extern "C" 用于告诉编译器，按照C的调用约定来进行函数调用
 pub extern "C" fn _start() -> ! {
@@ -331,7 +332,7 @@ pub extern "C" fn _start() -> ! {
 
 * `--target` 指定编译的平台，`CPU架构`、`vendor`、`OS`、`ABI`等，下面是一个target的例子。
 
-```
+```rust
 {
     "llvm-target": "x86_64-unknown-none",
     "data-layout": "e-m:e-i64:64-f80:128-n8:16:32:64-S128",
@@ -360,7 +361,7 @@ pub extern "C" fn _start() -> ! {
 * `Box::leak`用于将消费Box::new创建出来的智能指针，并返回`'a mut`指针
 * 数组的构造需要其类型是Copy语义的，为了解决这个问题需要用到`array-init` crate
 
-```
+```rust
 // Volatile 是Non-Copy的类型
 struct Buffer {
     chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
@@ -376,7 +377,8 @@ fn construct_buffer() -> Buffer {
 ```
 
 * `#[repr(transparent)]`确保struct和内部的类型是一致的内存布局
-```
+
+```rust
 // 确保ColorCode和u8是一样的内存布局
 #[repr(transparent)]
 struct ColorCode(u8);
@@ -384,7 +386,7 @@ struct ColorCode(u8);
 
 * 测试panic的场景
 
-```
+```rust
     #[should_panic]
     // or use:
     #[should_panic(expected = "Some message")]
@@ -416,3 +418,4 @@ type Result<T> = result::Result<T, UUIDError>;
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)
 * [System V ABI read zone](https://os.phil-opp.com/red-zone/)
 * [disbale SIMD](https://os.phil-opp.com/disable-simd/)
+* [Too Many Linked Lists](https://rust-unofficial.github.io/too-many-lists/)

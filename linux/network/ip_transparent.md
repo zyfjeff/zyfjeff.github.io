@@ -77,3 +77,19 @@ ret = setsockopt(fd, SOL_IP, IP_TRANSPARENT, &value, sizeof(value));
 * [Linux路由分析 - Just For Coding](http://www.just4coding.com/blog/2016/12/10/linux-route/)
 * [Transparent proxy support](https://www.kernel.org/doc/Documentation/networking/tproxy.txt)
 * [图解正向代理、反向代理、透明代理-丁胖胖的BLOG-51CTO博客](http://blog.51cto.com/z00w00/1031287)
+
+
+IP_TRANSPARENT (since Linux 2.6.24)
+      Setting this boolean option enables transparent proxying on
+      this socket.  This socket option allows the calling applica‐
+      tion to bind to a nonlocal IP address and operate both as a
+      client and a server with the foreign address as the local end‐
+      point.  NOTE: this requires that routing be set up in a way
+      that packets going to the foreign address are routed through
+      the TProxy box (i.e., the system hosting the application that
+      employs the IP_TRANSPARENT socket option).  Enabling this
+      socket option requires superuser privileges (the CAP_NET_ADMIN
+      capability).
+
+      TProxy redirection with the iptables TPROXY target also
+      requires that this option be set on the redirected socket.
