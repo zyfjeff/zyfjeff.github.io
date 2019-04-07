@@ -1,3 +1,7 @@
+## eBPF原理
+
+
+
 ## XDP generic 和 XDP native
 前者是在网卡收到包后，创建skb的时候(需要设置XDP_FLAGS_SKB_MODE启用)，作用在Linux内核层面，
 后者则是直接在网卡驱动层。前者拿到包后可以任意处理，但是后者要redirect的时候，只能redirect到另外一个支持XDP native的设备中。
@@ -35,7 +39,6 @@ eBPF载入程序后会进行深度搜索CFG来检测，如果发现不可达的�
   6. Value and alignment tracking for data access (pkt pointer, map access)
   7. Register liveness analysis for pruning
   8. State pruning for reducing verification complexity
-
 
 ## bcc
 

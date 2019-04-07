@@ -49,7 +49,11 @@
 
 * `self`(this指针)、`Self`(类型本身)
 
-* Closure 默认是引用捕获，可以通过move来做take Ownership，但是实际上上并不一定是move，又可能是copy
+* 下划线开头的变量会当场析构
+
+* `std::mem::drop` 可以立即析构一个对象语义的变量(本质上是将其移动到函数作用域内)
+
+* Closure 默认是引用捕获，可以通过move来做take Ownership，但是实际上上并不一定是move，有可能是copy
 * Closure Traits
 
 ```rust
@@ -413,6 +417,214 @@ pub enum UUIDError {
 
 type Result<T> = result::Result<T, UUIDError>;
 ```
+
+* `mem::replace`
+
+如何将一个对象的值move到其他地方，然后重新赋值呢?
+
+```rust
+pub struct List {
+    head: Link,
+}
+
+enum Link {
+    Empty,
+    More(Box<Node>),
+}
+
+struct Node {
+    elem: i32,
+    next: Link,
+}
+
+
+pub fn push(&mut self, elem: i32) {
+    let new_node = Box::new(Node {
+        elem: elem,
+        next: self.head,  // 这里将self.head移动到next
+    });
+
+    // 这里进行了重新赋值，编译器会警告，因为使用了一个已经被moved的变量
+    self.head = Link::More(new_node);
+}
+
+// mem::replace可以一次性完成这个交换赋值的动作，也可以先临时替换为一个中间值，然后再赋值
+
+pub fn push(&mut self, elem: i32) {
+    let new_node = Box::new(Node {
+        elem: elem,
+        // 先替换为一个中间值
+        next: mem::replace(&mut self.head, Link::Empty),
+    });
+
+    self.head = Link::More(new_node);
+}
+```
+
+Option的take方法其实就是`mem::replace(&mut variable, None)`;
+
+* Option map方法
+
+map方法等同于下面这种形式，通过模式匹配Option拿到其中的元素，传递到map中的lambda方法，
+对于Lambda方法中返回的元素通过Some进行包装。
+
+```rust
+match option { None => None, Some(x) => Some(y) }
+```
+
+* `Option<&mut value>` 调用map传递的value就是mut的
+
+* 如何创建自定义迭代器
+
+* lifetime-elision
+
+  * Each elided lifetime in input position becomes a distinct lifetime parameter.
+  * If there is exactly one input lifetime position (elided or not), that lifetime is assigned to all elided output lifetimes.
+  * If there are multiple input lifetime positions, but one of them is &self or &mut self, the lifetime of self is assigned to all elided output lifetimes.
+  * Otherwise, it is an error to elide an output lifetime.
+
+* mut修饰位置不同，其含义不同
+
+```rust
+fn main() {
+  let mut var = 0_i32;  // mut修饰变量名，表示这个变量是可以重新指向新的变量的。
+  {
+    let p1 = &mut var;  // mut 修饰的是借用指针&，表示被指向的对象是可以被修改的
+    *p1 = 1;
+  }
+
+  {
+    let temp = 2_i32;
+    let mut p2 = &var;  // p2可以重新指向，但是无法通过p2来更改var的值
+    p2 = &temp
+  }
+
+  {
+    let mut temp = 3_i32;
+    let mut p3 = &mut var;  // 既可以重新指向，也可以修改var的值
+    *p3 = 3;
+    p3 = &mut temp
+  }
+}
+```
+
+* 共享不可变、可变不共享，唯一修改权原则
+
+* error handling 针对Option或Result处理方式相同
+  1. `panic!`
+  2. `unwrap()`等同于match的时候，遇到error或None触发`panic!`
+
+```rust
+impl<T> Option<T> {
+  fn unwrap(self) -> T {
+    match self {
+        Option::Some(val) => val,
+        Option::None =>
+          panic!("called `Option::unwrap()` on a `None` value"),
+    }
+  }
+}
+```
+
+  3. `unwrap_or`
+
+```rust
+fn unwrap_or<T>(option: Option<T>, default: T) -> T {
+    match option {
+        None => default,
+        Some(value) => value,
+    }
+}
+```
+  4. `map` 将Option解开，如果不是None就回调function，最后将返回值包装成Option
+
+```rust
+fn map<F, T, A>(option: Option<T>, f: F) -> Option<A> where F: FnOnce(T) -> A {
+    match option {
+        None => None,
+        Some(value) => Some(f(value)),
+    }
+}
+```
+
+  5. `and_then` 这个和map相同，只是要求function的返回值是Option，不对其返回值封装成Option
+
+```rust
+fn and_then<F, T, A>(option: Option<T>, f: F) -> Option<A>
+        where F: FnOnce(T) -> Option<A> {
+    match option {
+        None => None,
+        Some(value) => f(value),
+    }
+}
+```
+
+  6. `unwrap_or_else` 如果是None就回调function，否则就直接返回Option的值
+
+  7. Result type alias idiom
+
+```rust
+use std::num::ParseIntError;
+use std::result;
+
+type Result<T> = result::Result<T, ParseIntError>;
+
+fn double_number(number_str: &str) -> Result<i32> {
+    unimplemented!();
+}
+```
+
+  8. `ok_or` 将Option转换为Result
+
+```rust
+fn ok_or<T, E>(option: Option<T>, err: E) -> Result<T, E> {
+    match option {
+        Some(val) => Ok(val),
+        None => Err(err),
+    }
+}
+```
+
+  9. `map_err` Maps a `Result<T, E>` to `Result<T, F>`，如果是Ok就原封不动返回，否则就将error值传递给fucntion，返回另一种类型，最后将结果包装成Result
+
+  10. `try!` or `?`
+
+```rust
+macro_rules! try {
+    ($e:expr) => (match $e {
+        Ok(val) => val,
+        Err(err) => return Err(err),
+    });
+}
+```
+
+  11. `std::error::Error` trait，自定义错误类型，需要实现这个trait
+
+```rust
+use std::fmt::{Debug, Display};
+
+trait Error: Debug + Display {
+  /// A short description of the error.
+  fn description(&self) -> &str;
+
+  /// The lower level cause of this error, if any.
+  fn cause(&self) -> Option<&Error> { None }
+}
+```
+
+  12. `Box<Error>` 使用这个错误类型，而不是具体的类型。
+
+  13. `expect`  如果是None就`panic!`，并输出一段自定义的错误消息。
+
+  14. `std::convert::From` 自定义类型转换，可以将自定义的错误类型转换为预期的标准错误类型
+
+```rust
+trait From<T> {
+    fn from(T) -> Self;
+}
+```
+
+  15. `failure::Error` `failure` crate，类似于`Box<Error>`，但是这个crate额外可以打印backtraces，以及好的向下转型的支持。
 
 ## Link
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)

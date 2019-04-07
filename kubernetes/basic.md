@@ -27,6 +27,33 @@ kubectl enable docker kubelet
 7. 参考步骤6将其他节点加入
 
 
+## Basic command
+
+* kubectl run
+
+  * easy way to get started
+  * versatile
+
+* `kubectl create <resource>`
+
+  * explicit, but lacks some features
+  * can't create a CronJob
+  * can't pass command-line arguments to deployments
+
+* `kubectl create -f foo.yaml` or `kubectl apply -f foo.yaml`
+
+  * all features are available
+  * requires writing YAML
+
+```bash
+kubectl run --generator=run-pod/v1 nginx --image=nginx 仅仅创建出pod容器
+kubectl run nginx --image=nginx 创建pod容器的同时，会创建一个名为nginx的deployment
+```
+
+--grace-period/--now 覆盖默认的宽限期
+--cascade=false 默认删除一种资源，会将其关联的其他资源都删除，通过这个选项可以让其不删除其关联的资源
+
+
 ## 资源对象
 1. workload(工作负载型资源): Pod、ReplicaSet、Deplovment、StatefulSet、DaemonSet、Job、Cronjob
 2. 服务发现和均衡: Service、Ingress
@@ -34,11 +61,13 @@ kubectl enable docker kubelet
 4. 集群级资源: Namespace、Node、Role、ClusterRole、RoleBinding、ClusterRoleBinding
 5. 元数据型资源: HPA、PodTemplate、LimitRange
 
+核心目标是为了更好的运行和丰富Pod资源
+
 ## 资源定义
 ApiServer仅接收JSON格式的资源定义:(yaml更易读，可以无损转化为JSON)
 大部分资源的配置清单都由五个部分组成:
 1. apiVersion: group/version (kubectl api-versions，省略掉组的话就是core类型的核心组)
-2. kind: 资源类型
+2. kind: 资源类型，分为对象类(Pod、Namespace、Depolyment等)、列表类(PodList、NamespaceList)、简单类
 3. metadata:
 	1. name
 	2. namespace
@@ -241,7 +270,6 @@ spec:
 1. userspace: 先到service ip，然后转到node上的kube-proxy，由kube-proxy向后转发
 2. iptables: 直接iptables转发，不需要kube-proxy
 3. ipvs:
-
 
 apiVersion: v1
 kind: Service

@@ -441,12 +441,44 @@ response_nonce:
 2. `node`则是Envoy节点的相关信息
 3. `resource_names` Envoy中每一类资源都是有名字的，通过携带这个字段可以告诉管理服务器只返回对应的资源即可，如果不携带则表示需要获取这类资源的全部
 4. `type_url` 唯一标识一类资源的，ADS需要这个字段来识别出这个请求是哪种类型的
-5. `response_nonce`
+5. `response_nonce` 用于显示的对`DiscoverResponse`做ack
+
+> 如果请求被接收了，那么envoy会进行ack，返回的response_nonce对应DiscoveryResponse中的nonce，version_info则对应DiscoveryResponse中的version_info
+> 如果拒绝了DiscoveryResponse则返回的response_nonce对应DiscoveryResponse中的nonce，version_info则对应上一次DiscoveryResponse中的version_info
+
+LDS/CDS的resource_names一般为空，表示获取所有的cluster和listener资源，而EDS和RDS一般会带上resource name获取感兴趣的资源，这个resource name来自于LDS和CDS。
+如果一个EDS没有对应的CDS，那么这个EDS是无效的，Envoy会忽略这个EDS。
+
+LDS和CDS请求存在requesting wramming的过程，要求获取到LDS和EDS以及依赖的EDS和RDS，Envoy才算初始化完成。
+
+xDS对于各个资源的顺序没有约束，因为每一个资源都是一个单独的流，资源的到达顺序会导致流量存在下降的问题，比如，LDS就绪了但是依赖的CDS还没有继续，那么这会导致请求无效。
+但是如果CDS先就绪，然后LDS再就绪就可以避免这个问题了。所以为了避免因为资源更新的顺序问题导致流量被drop，要求资源更新的顺序如下:
+
+* CDS updates (if any) must always be pushed first.
+* EDS updates (if any) must arrive after CDS updates for the respective clusters.
+* LDS updates must arrive after corresponding CDS/EDS updates.
+* RDS updates related to the newly added listeners must arrive after CDS/EDS/LDS updates.
+* VHDS updates (if any) related to the newly added RouteConfigurations must arrive after RDS updates.
+* Stale CDS clusters and related EDS endpoints (ones no longer being referenced) can then be removed.
+
+为了保证资源请求的顺序可以按照上述定义的顺序，需要将所有的资源请求和响应控制在同一个流中。
+
+xDS中资源的更新是没办法单独推送的，每次推送的资源都是全量的，即使其中部分资源发生了变更，都是全量下发，envoy则会进行资源对比，有变更的则进行应用。
+这样带来的传输消耗还是蛮大的，为此有了`Incremental xDS`，只下发有变更的资源。
+
+`Incremental xDS` 一般用在以下几个场景:
+
+* Initial message in a xDS bidirectional gRPC stream.
+
+* As an ACK or NACK response to a previous DeltaDiscoveryResponse.
+In this case the response_nonce is set to the nonce value in the Response. ACK or NACK is determined by the absence or presence of error_detail.
+
+* Spontaneous DeltaDiscoveryRequest from the client.
+This can be done to dynamically add or remove elements from the tracked resource_names set. In this case response_nonce must be omitted.
 
 Reference:
 1. https://github.com/envoyproxy/envoy/blob/master/api/XDS_PROTOCOL.md
 2. https://developers.google.com/protocol-buffers/docs/proto3#any
-3.
 
 
 ## Envoy生命周期callback
@@ -536,6 +568,8 @@ FilterA::onNewConnection->FilterA::onData->FilterB::onNewConnection->FilterB::on
   * envoy.overload_actions.shrink_heap
 
 3. Trigger 每一个OverloadAction会包含一个触发器，里面设置了阀值，提供了isFired来表明当前触发器是否触发了
+
+4. Resource 每一个资源Monitor和一个Resource关联起来，这个Resource提供了
 
 Setp1: 实现核心接口
 

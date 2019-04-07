@@ -8,7 +8,7 @@
 
 an、a、the等
 the后面接辅音和元音其读音不同
-q
+
 ## 名词的数
 
 * 可数名词(C)
@@ -228,6 +228,42 @@ The girl is very hot 这个女孩非常性感
 ## 指示代词
 this、these、that、those
 
+## 双宾语动词
+
+give、teach、write、send、offer、post、read
+
+teach you English
+write him a letter
+send her an e-mail
+offer you a job
+read me this lettle
+post him a letter
+shell her a new car
+
+给她带来一些花吧
+Bring her some flower
+
+给我讲个英语故事吧
+Tell me an English story
+
+把那本书递给我
+Hand me that book
+
+把那本书给我拿过来瞧一瞧、看一看
+Show me that book
+
+给我买一朵花吧
+Buy me a flower
+
+
+动词+代词+名词
+英文中一个句子一般最多只会出现一个句子
+
+
+## 连读
+
+一辅一元、前辅后元可以一起连读 An empty
+
 
 # 句型
 
@@ -242,6 +278,8 @@ this、these、that、those
 9. what are their jobs? 复数形式
 10. Tied and thirsty
 11. There be(存在) + 主语
+12. Where is it?
+
 某地存在某人或某物
 There is a book on the table.
 There is a pen in my bag
@@ -258,6 +296,18 @@ There is no smoke without fire 无风不起浪
 There is no best but better
 There are spots in the sun 人无完人
 
+所在位置、颜色、具体位置、状态
+There is a bed in the bedroom
+The bed is green
+It is in the middle of the room
+And it is very clean
+
+
+
+1. 我有很多钱  拥有的关系，用have
+2. 街上有很多车 存在的关系，用There be
+3. There are + 复数名词 / There is + 单数名词
+4. There is a cooker in the kitchen => A cooker is in the kitchen there
 
 # 单词
 
@@ -312,15 +362,53 @@ easy-going 好相处的
 * light 轻的
 
 * thirsty 渴
+
+thirty 30
+thirteen 13
+
 * jam 果酱、堵塞
 
+* boy
+cowboy 牛仔
+busboy  餐馆服务生
+
+* sit down
+sit down please
+have a seat, please
+
+* empty
+An empty 可以连读 empty的首字母是原因、An最后一个字母是辅音，辅音和元音可以连读
+* glass、box、cup、bottle、tin
+* knife、fork、spoon
+k和n在一起的时候，k不发音，例如:know
+* shelf 架子 复数shelves
+bookshelf、shelf life 保质期
+* desk、table
+tea table、office desk、school desk
+* plate 盘子
+* cupboard
+* cigarette 香烟
+cigar 雪茄
+* television 电视机
+* floor 地板
+* dressing 梳妆台
+* magazine 杂志
+* newspaper
+* stereo 立体声音响
+* refrigerator/fridge 电冰箱
+* electric 带电的，可通电的
+* bottle 瓶子
 
 # 短语
-big mouth 大嘴巴
-small change 零钱
-small talk 闲聊
-light rain 小雨
-light snow 小雪
-long time no see 好久不见
-grandfather clock 老座钟
-Great-grandfather 曾祖父
+
+* big mouth 大嘴巴
+* small change 零钱
+* small talk 闲聊
+* light rain 小雨
+* light snow 小雪
+* long time no see 好久不见
+* grandfather clock 老座钟
+* Great-grandfather 曾祖父
+* a full stop 句号
+* legwork 跑腿工作
+* boil the ocean 好高骛远
