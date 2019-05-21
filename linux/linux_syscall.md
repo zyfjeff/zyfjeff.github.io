@@ -87,7 +87,7 @@ main(int argc, char *argv[])
 
 ## vsock (4.8+)
 
-```
+```3
   #include <sys/socket.h>
   #include <linux/vm_sockets.h>
 
@@ -100,3 +100,28 @@ main(int argc, char *argv[])
 reference:
 1. [man pages](http://man7.org/linux/man-pages/man7/vsock.7.html)
 2. [vsock test](https://cregit.linuxsources.org/code/4.19/tools/testing/vsock/vsock_diag_test.c.html)
+
+
+## mincore
+
+用于判断一个文件是否在内存中
+
+```
+       mincore - determine whether pages are resident in memory
+
+SYNOPSIS
+       #include <unistd.h>
+       #include <sys/mman.h>
+
+       int mincore(void *addr, size_t length, unsigned char *vec);
+```
+
+reference:
+
+1. [man pages](http://man7.org/linux/man-pages/man2/mincore.2.html)
+
+## memfd_create
+
+
+reference:
+1. [man pages](http://www.man7.org/linux/man-pages/man2/memfd_create.2.html)

@@ -25,6 +25,8 @@
 
 * 变量名前缀使用`_`表示这是一个`unused variable`。
 
+* `struct`默认没有实现Copy语义，即使其中包含的成员都是值语义的，除非给这个`struct`指定`Copy`、`Clone`等。
+
 * Rust中变量是可以隐藏的，再次声明和定义变量的时候会覆盖之前声明定义的变量。
 
 * Rust中的类型之间是不允许隐式转换的，需要通过as来显示的进行类型转换。
@@ -511,6 +513,7 @@ fn main() {
 * 共享不可变、可变不共享，唯一修改权原则
 
 * error handling 针对Option或Result处理方式相同
+
   1. `panic!`
   2. `unwrap()`等同于match的时候，遇到error或None触发`panic!`
 
@@ -626,8 +629,114 @@ trait From<T> {
 
   15. `failure::Error` `failure` crate，类似于`Box<Error>`，但是这个crate额外可以打印backtraces，以及好的向下转型的支持。
 
+* 内部可变性
+
+对象是不可变的，但是又需要某些情况下内部的一些字段是可变的，典型的像Rc、Mutex等，Rc在赋值的时候，希望内部的引用计数可以递增。但是Rc自身是不可变的。
+RefCell和Cell可用于实现内部可变性，前者带有运行时的借用检查，后者没有，后者要求类型必须实现Cope trait，前者不要求。这两者都是非线程安全的。
+
+线程安全版本的内部可变性
+  1. Copy类型 `Atomic*类型` 可以实现线程安全版本的内部可变性。
+  2. Non-Copy类型 `Arc<RwLock<_>>`
+
+`Arc<Vec<RwLock<T>>>`和`Arc<RwLock<Vec<T>>>` 前者不能并发的操作`Vec`，但是可以并发的操作其值T，后者可以并发的操作Vec，但是无法并发操作T
+
+内部可变性的内部实现依靠`UnsafeCell`，起内部实现依靠编译器
+
+```rust
+#[lang = "unsafe_cell"]
+#[stable(feature = "rust1", since = "1.0.0")]
+pub struct UnsafeCell<T: ?Sized> {
+    value: T,
+}
+
+// 将不可变转换为可变
+pub fn get(&self) -> *mut T {
+    &self.value as *const T as *mut T
+}
+
+pub struct Cell<T> {
+  value: UnsafeCell<T>,
+}
+
+pub fn get(&self) -> T {
+  unsafe{ *self.value.get() }
+}
+
+pub fn set(&self, value: T) {
+  unsafe {
+      *self.value.get() = value;
+  }
+}
+
+pub struct RefCell<T: ?Sized> {
+    borrow: Cell<BorrowFlag>,
+    value: UnsafeCell<T>,
+}
+
+
+pub fn borrow(&self) -> Ref<T> {
+  match BorrowRef::new(&self.borrow) {
+      Some(b) => Ref {
+          value: unsafe { &*self.value.get() },
+          borrow: b,
+      },
+      None => panic!("RefCell<T> already mutably borrowed"),
+  }
+}
+```
+
+* `&` vs `ref` in Rust patterns
+
+match既可以操作引用也可以操作value
+
+```rust
+struct Foo(String);
+
+fn main() {
+    let foo = &Foo(String::from("test"));
+    // 匹配引用，因此并没有发生move
+    match foo {
+        Foo(x) => println!("Matched! {}", x),
+    };
+    // 这里仍然还可以对foo进行操作。如果上面换成对value进行match，这里就会出现错误，显示foo的值已经被moved了
+    println!("{}", foo.0);
+}
+```
+
+  1. `&`作用于match一个引用的时候，用于match这个引用指向的对象
+
+```rust
+struct Foo(String);
+
+fn main() {
+    let foo = &Foo(String::from("test"));
+    match foo {
+        // 并不是match引用本身，而是引用指向的对象，foo本身是引用，其引用部分正好和pattern的`&`抵消，也就是所有Foo(x) 正好对于value部分
+        &Foo(x) => println!("Matched! {}", x),
+    };
+    //这里就会出现错误，显示foo的值已经被moved了
+    println!("{}", foo.0);
+}
+```
+  2. ref 作用于match，避免value被move，而是使用引用获取match匹配的值
+
+```rust
+struct Foo(String);
+
+fn main() {
+    let foo = Foo(String::from("test"));
+    // 尽管是对value进行match，但是通过ref关键字，使得可以通过引用过的方式访问match到的值
+    match foo {
+        Foo(ref x) => println!("Matched! {}", x),
+    };
+    println!("{}", foo.0);
+}
+```
+
 ## Link
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)
 * [System V ABI read zone](https://os.phil-opp.com/red-zone/)
 * [disbale SIMD](https://os.phil-opp.com/disable-simd/)
 * [Too Many Linked Lists](https://rust-unofficial.github.io/too-many-lists/)
+* [Interior mutability in Rust: what, why, how?](https://ricardomartins.cc/2016/06/08/interior-mutability)
+* [& vs. ref in Rust patterns](http://xion.io/post/code/rust-patterns-ref.html)

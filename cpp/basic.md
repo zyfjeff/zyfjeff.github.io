@@ -1,5 +1,41 @@
 # 编程实践
 
+## static and thread local Initialization
+这两类变量被称为Non-local variables，static变量会在main函数启动之前进行初始化(除非主动deferred)，所有的thread_local
+变量则会在线程运行之前进行初始化。
+
+> 在函数内声明的static变量属于 local static
+
+初始化又分为两种:
+
+* 静态初始化
+
+  1. `Constant initialization` 理论上应该在编译期完成，预先计算好值，即使编译器不这样做，也要保证这类初始化在动态初始化之前先完成
+  2. `Zero initialization` 没有提供任何初始化值的，non-local static和thread local变量的初始化，会放在.bss段，不占用磁盘空间。
+
+* 动态初始化
+
+  1. `Unordered dynamic initialization` static/thread-local类模版、static 数据成员、可变模版等
+  2. `Partially-ordered dynamic initialization` (C++17)
+  3. `Ordered dynamic initialization` 相同编译单元non-local variables是顺序的。
+
+* constant initialization
+
+```
+static T & ref = constexpr;
+static T object = constexpr;
+```
+
+* zero initialization
+
+```
+static T object ;
+CharT array [ n ] = "";
+T () ;
+T t = {} ;
+T {} ;
+```
+
 ## 使用duration_cast使得时间转化的代码可读性更高
 
 ```cpp

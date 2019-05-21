@@ -7,7 +7,9 @@ var x int64 = 64000
 var y int16 = int16(x)
 ```
 
+
 * range会复制目标数据，受直接影响的是数组，可改用数组指针或切片类型
+
 * 字典切片都是引用类型，拷贝开销低
 * 编译器会进行逃逸分析将栈上变量分配在堆上
 * go build -gcflags "-l -m" 禁用函数内联(-l)，输出优化信息(-m)
@@ -76,6 +78,17 @@ type Person struct {
 	Telephone int64 `json:"tel,string"` // 输出类型为string
 }
 ```
+
+* interface slice
+
+没办法把一个slice赋值给一个interface slice
+
+```golang
+var dataSlice []int = foo()
+var interfaceSlice []interface{} = dataSlice
+```
+
+https://github.com/golang/go/wiki/InterfaceSlice
 
 ## profiling
 
@@ -227,7 +240,7 @@ or = func(channels ...<-chan interface{}) <-chan interface{} {
 
 * 协程中发生的错误也应该通过channel暴露出来，将error和结果封装在一起
 
-```cpp
+```golang
 type Result struct {
     Error error
     // 协程通过channel返回的结果
@@ -362,3 +375,16 @@ bridge := func(
     return valStream
 }
 ```
+
+## Garbage Collection
+
+垃圾回收的三个阶段:
+
+* Mark Setup - STW
+打开写屏障，因为应用程序的协程和垃圾回收器的协程是并发运行的，为了保证数据的完整性，需要打开写屏障。打开写屏障需要让所有协程
+都停止工作。
+
+* Marking - Concurrent
+* Mark Termination - STW
+
+

@@ -3,6 +3,153 @@
 单进程多线程架构，一个主线程控制各种零星的协调任务，多个worker线程执行listening、filtering、和数据转发等，只要一个连接被listener接受，那么这个连接上
 所有的工作都是在一个线程中完成的。
 
+
+# 热重启
+
+1. 请求关闭Admin功能，并开始接管，这个过程是非原子的。
+
+```cpp
+
+  restarter_.shutdownParentAdmin(info);
+  original_start_time_ = info.original_start_time_;
+  admin_ = std::make_unique<AdminImpl>(initial_config.admin().profilePath(), *this);
+  if (initial_config.admin().address()) {
+    if (initial_config.admin().accessLogPath().empty()) {
+      throw EnvoyException("An admin access log path is required for a listening server.");
+    }
+    ENVOY_LOG(info, "admin address: {}", initial_config.admin().address()->asString());
+    admin_->startHttpListener(initial_config.admin().accessLogPath(), options.adminAddressPath(),
+                              initial_config.admin().address(),
+                              stats_store_.createScope("listener.admin."));
+  } else {
+    ENVOY_LOG(warn, "No admin address given, so no admin HTTP server started.");
+  }
+
+```
+
+2. 创建ListenerManager、ClusterManagerFactory，一些管理数据结构
+
+```cpp
+overload_manager_ = std::make_unique<OverloadManagerImpl>(dispatcher(), stats(), threadLocal(),
+                                                          bootstrap_.overload_manager());
+
+// Workers get created first so they register for thread local updates.
+listener_manager_ = std::make_unique<ListenerManagerImpl>(*this, listener_component_factory_,
+                                                          worker_factory_, time_system_);
+
+// The main thread is also registered for thread local updates so that code that does not care
+// whether it runs on the main thread or on workers can still use TLS.
+thread_local_.registerThread(*dispatcher_, true);
+
+// We can now initialize stats for threading.
+stats_store_.initializeThreading(*dispatcher_, thread_local_);
+
+// Runtime gets initialized before the main configuration since during main configuration
+// load things may grab a reference to the loader for later use.
+runtime_loader_ = component_factory.createRuntime(*this, initial_config);
+
+// Once we have runtime we can initialize the SSL context manager.
+ssl_context_manager_ = std::make_unique<Ssl::ContextManagerImpl>(time_system_);
+
+cluster_manager_factory_ = std::make_unique<Upstream::ProdClusterManagerFactory>(
+    runtime(), stats(), threadLocal(), random(), dnsResolver(), sslContextManager(), dispatcher(),
+    localInfo(), secretManager());
+
+```
+
+3. Bootstrap初始化
+
+```cpp
+  // Now the configuration gets parsed. The configuration may start setting thread local data
+  // per above. See MainImpl::initialize() for why we do this pointer dance.
+  Configuration::MainImpl* main_config = new Configuration::MainImpl();
+  config_.reset(main_config);
+  main_config->initialize(bootstrap_, *this, *cluster_manager_factory_);
+```
+
+  1. 初始化静态secret
+  2. 初始化静态cluster
+  3. 初始化静态listener
+  4. 初始化ralimit service
+  5. 初始化tracing
+  6. 初始化sats sinks
+
+3. 创建LDS API，注册init target
+
+```cpp
+  // Instruct the listener manager to create the LDS provider if needed. This must be done later
+  // because various items do not yet exist when the listener manager is created.
+  if (bootstrap_.dynamic_resources().has_lds_config()) {
+    listener_manager_->createLdsApi(bootstrap_.dynamic_resources().lds_config());
+  }
+```
+
+
+4. 集群初始化
+
+```cpp
+  // We need the RunHelper to be available to call from InstanceImpl::shutdown() below, so
+  // we save it as a member variable.
+  run_helper_ = std::make_unique<RunHelper>(*this, *dispatcher_, clusterManager(),
+                                            access_log_manager_, init_manager_, overloadManager(),
+                                            [this]() -> void { startWorkers(); });
+
+  // starts.
+  cm.setInitializedCb([&instance, &init_manager, &cm, workers_start_cb]() {
+    if (instance.isShutdown()) {
+      return;
+    }
+
+    // Pause RDS to ensure that we don't send any requests until we've
+    // subscribed to all the RDS resources. The subscriptions happen in the init callbacks,
+    // so we pause RDS until we've completed all the callbacks.
+    cm.adsMux().pause(Config::TypeUrl::get().RouteConfiguration);
+
+    ENVOY_LOG(info, "all clusters initialized. initializing init manager");
+
+    // Note: the lamda below should not capture "this" since the RunHelper object may
+    // have been destructed by the time it gets executed.
+    init_manager.initialize([&instance, workers_start_cb]() {
+      if (instance.isShutdown()) {
+        return;
+      }
+
+      workers_start_cb();
+    });
+```
+
+5. 等集群初始化完成，执行init manager
+
+```cpp
+    // Note: the lamda below should not capture "this" since the RunHelper object may
+    // have been destructed by the time it gets executed.
+    init_manager.initialize([&instance, workers_start_cb]() {
+      if (instance.isShutdown()) {
+        return;
+      }
+
+      workers_start_cb();
+    });
+```
+
+会等到LDS、RDS、SDS的第一个配置拿到这个初始化才会完成，然后调用workers_start_cb
+
+6. 开始worker，开启接收流量，并通知老进程drain listener
+
+```cpp
+void InstanceImpl::startWorkers() {
+  listener_manager_->startWorkers(*guard_dog_);
+
+  // At this point we are ready to take traffic and all listening ports are up. Notify our parent
+  // if applicable that they can stop listening and drain.
+  restarter_.drainParentListeners();
+  drain_manager_->startParentShutdownSequence();
+}
+```
+
+* 不主动过关闭连接，连接的关闭依靠空闲时间、被动关闭还有shutdown(依赖--parent-shutdown-time-s)
+
+
 # 性能优化
 
 1. `--disable-hot-restart` 关闭热重启，避免使用共享内存存放stats统计信息
@@ -633,6 +780,37 @@ void OverloadManagerImpl::start() {
 }
 ```
 
+## Envoy internal header
+
+
+## Cluster Manager
+
+Cluster warming，当server启动的时候或者通过CDS初始化Cluster时，Cluster是处于warmed状态的，这意味着
+此时集群并不可用，直到下面两个事情完成:
+
+1. 初始服务发现负载（例如，DNS解析，EDS更新等）.
+2. 完成第一次健康检查
+
+对于新增集群处于warmed状态来说，如果HTTP router路由到这个集群，此时会返回404/503(依据配置来)
+对于更新已有集群的情况来说，在更新的集群还没有初始化完成之前，使用老的集群来分发流量
+
+
+## Zone aware routing
+
+
+## Load Ststs reporter
+
+```yaml
+config.bootstrap.v2.ClusterManager:
+{
+  "local_cluster_name": "...",
+  "outlier_detection": "{...}",
+  "upstream_bind_config": "{...}",
+  "load_stats_config": "{...}"
+}
+```
+
+load_stats_config 用于配置管理集群，启动的时候，会等待管理平面发送LoadStatsResponse，响应中带有需要获取stats的集群名词列表，Envoy会定时将这些集群的stats信息发送到控制平面。
 
 ## IP Transparency
 
@@ -649,6 +827,151 @@ Envoy通过socket可以拿到远程的地址也可以借助Proxy Protocol拿到d
 需要将其流量指向envoy，这里需要让Envoy和upstream部署在一起，然后使用iptables来完成。
 
 TODO(tianqian.zyf): 例子
+
+## Cluster subset
+
+本质上是将一个集群拆分成多个子集群，Envoy中称为subset，而subset的划分是根据每一个endpoint中携带的metadata来组织subset集合。
+
+
+* Fallback策略:
+
+  1. NO_ENDPOINT 如果没有匹配的subset就失败
+  2. ANY_ENDPOINT 如果没有匹配的subset就从整个集群中按照负载均衡的策略来选择
+  3. DEFAULT_SUBSET 匹配指定的默认subset，如果机器都没有指定subset那么就使用ANY_ENDPOINT
+
+* Selecting Subsets
+
+用来表明subset如何生成，下面这个例子就是表明带有a和b的metadata的机器会组成一个subset。如果一个机器带有a、b、x三个metadata，
+那么这台机器就会属于两个subset。
+
+```json
+{
+  "subset_selectors": [
+    { "keys": [ "a", "b" ] },
+    { "keys": [ "x" ] }
+  ]
+}
+```
+
+* Example
+
+Endpoint | stage | version | type   | xlarge
+---------|-------|---------|--------|-------
+e1       | prod  | 1.0     | std    | true
+e2       | prod  | 1.0     | std    |
+e3       | prod  | 1.1     | std    |
+e4       | prod  | 1.1     | std    |
+e5       | prod  | 1.0     | bigmem |
+e6       | prod  | 1.1     | bigmem |
+e7       | dev   | 1.2-pre | std    |
+
+Note: Only e1 has the "xlarge" metadata key.
+
+Given this CDS `envoy::api::v2::Cluster`:
+
+``` json
+{
+  "name": "c1",
+  "lb_policy": "ROUND_ROBIN",
+  "lb_subset_config": {
+    "fallback_policy": "DEFAULT_SUBSET",
+    "default_subset": {
+      "stage": "prod",
+      "version": "1.0",
+      "type": "std"
+    },
+    "subset_selectors": [
+      { "keys": [ "stage", "type" ] },
+      { "keys": [ "stage", "version" ] },
+      { "keys": [ "version" ] },
+      { "keys": [ "xlarge", "version" ] },
+    ]
+  }
+}
+```
+
+下面这些subset将会生成:
+
+stage=prod, type=std (e1, e2, e3, e4)
+stage=prod, type=bigmem (e5, e6)
+stage=dev, type=std (e7)
+stage=prod, version=1.0 (e1, e2, e5)
+stage=prod, version=1.1 (e3, e4, e6)
+stage=dev, version=1.2-pre (e7)
+version=1.0 (e1, e2, e5)
+version=1.1 (e3, e4, e6)
+version=1.2-pre (e7)
+version=1.0, xlarge=true (e1)
+
+默认的subset
+stage=prod, type=std, version=1.0 (e1, e2)
+
+
+Example:
+
+```yaml
+    filter_chains:
+    - filters:
+      - name: envoy.http_connection_manager
+        config:
+          codec_type: auto
+          stat_prefix: ingress_http
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: backend
+              domains:
+              - "*"
+              routes:
+              - match:
+                  prefix: "/"
+                route:
+                  cluster: service1
+                  metadata_match:
+                    filter_metadata:
+                      envoy.lb:
+                        env: taobao
+          http_filters:
+          - name: envoy.router
+            config: {}
+  clusters:
+  - name: service1
+    connect_timeout: 0.25s
+    type: strict_dns
+    lb_policy: round_robin
+    lb_subset_config:
+      fallback_policy: DEFAULT_SUBSET
+      default_subset:
+        env: "taobao"
+      subset_selectors:
+      - keys:
+        - env
+    load_assignment:
+      cluster_name: service1
+      endpoints:
+        lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 8081
+          metadata:
+            filter_metadata:
+              envoy.lb:
+                env: hema
+
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 8082
+          metadata:
+            filter_metadata:
+              envoy.lb:
+                env: taobao
+```
+
+Reference: https://github.com/envoyproxy/envoy/blob/master/source/docs/subset_load_balancer.md
 
 ## istio-iptables.sh 分析
 
@@ -667,4 +990,219 @@ REDIRECT模式
 
 ```
 
+```
+
+## 命令行参数
+
+* `--allow-unknown-fields` 关闭protobuf验证，忽略新增字段，核心实现就是 `message.GetReflection()->GetUnknownFields`
+
+```cpp
+
+  allow_unknown_fields_ = allow_unknown_fields.getValue();
+  if (allow_unknown_fields_) {
+    MessageUtil::proto_unknown_fields = ProtoUnknownFieldsMode::Allow;
+  }
+
+  // 核心实现
+  static void checkUnknownFields(const Protobuf::Message& message) {
+    if (MessageUtil::proto_unknown_fields == ProtoUnknownFieldsMode::Strict &&
+        !message.GetReflection()->GetUnknownFields(message).empty()) {
+      throw EnvoyException("Protobuf message (type " + message.GetTypeName() +
+                            ") has unknown fields");
+    }
+  }
+```
+
+* `--enable-mutex-tracing` 主要是利用了absl库提供的`RegisterMutexTracer`，将tracer信息通过callback的方式暴露出来
+
+```cpp
+MutexTracerImpl& MutexTracerImpl::getOrCreateTracer() {
+  if (singleton_ == nullptr) {
+    singleton_ = new MutexTracerImpl;
+    // There's no easy way to unregister a hook. Luckily, this hook is innocuous enough that it
+    // seems safe to leave it registered during testing, even though this technically breaks
+    // hermeticity.
+    absl::RegisterMutexTracer(&Envoy::MutexTracerImpl::contentionHook);
+  }
+  return *singleton_;
+}
+
+```
+
+* `--drain-time-s`
+
+```cpp
+
+  // 连接中有流量的时候才会实际走到这段代码，然后进行Drain处理
+  void ConnectionManagerImpl::ActiveStream::encodeHeaders(ActiveStreamEncoderFilter* filter,
+                                                        HeaderMap& headers, bool end_stream) {
+    .....
+    // See if we want to drain/close the connection. Send the go away frame prior to encoding the
+    // header block.
+    if (connection_manager_.drain_state_ == DrainState::NotDraining &&
+        connection_manager_.drain_close_.drainClose()) {
+
+      // This doesn't really do anything for HTTP/1.1 other then give the connection another boost
+      // of time to race with incoming requests. It mainly just keeps the logic the same between
+      // HTTP/1.1 and HTTP/2.
+      connection_manager_.startDrainSequence();
+      connection_manager_.stats_.named_.downstream_cx_drain_close_.inc();
+      ENVOY_STREAM_LOG(debug, "drain closing connection", *this);
+    }
+    .......
+   }
+
+  void ConnectionManagerImpl::startDrainSequence() {
+    ASSERT(drain_state_ == DrainState::NotDraining);
+    drain_state_ = DrainState::Draining;
+    codec_->shutdownNotice();
+    drain_timer_ = read_callbacks_->connection().dispatcher().createTimer(
+        [this]() -> void { onDrainTimeout(); });
+    drain_timer_->enableTimer(config_.drainTimeout());
+  }
+
+  // Drain 超时时间，默认是5000ms，如果是http2的协议会先发一个goAway协议帧，如果是http协议就什么都不做
+  void ConnectionManagerImpl::onDrainTimeout() {
+    ASSERT(drain_state_ != DrainState::NotDraining);
+    codec_->goAway();
+    drain_state_ = DrainState::Closing;
+    checkForDeferredClose();
+  }
+
+  // 最后会调用close
+  void ConnectionManagerImpl::checkForDeferredClose() {
+    if (drain_state_ == DrainState::Closing && streams_.empty() && !codec_->wantsToWrite()) {
+      read_callbacks_->connection().close(Network::ConnectionCloseType::FlushWriteAndDelay);
+    }
+  }
+
+```
+
+* `--file-flush-interval-msec` access log文件的刷盘间隔
+
+
+## Drain manager的实现
+
+
+1. 基础接口类
+
+```cpp
+
+
+// 网络层用来决策什么时候执行drain
+class DrainDecision {
+public:
+  virtual ~DrainDecision() {}
+  // 用于判断一个连接是否要closed并且进行drain处理
+  virtual bool drainClose() const PURE;
+};
+
+class DrainManager : public Network::DrainDecision {
+public:
+  virtual void startDrainSequence(std::function<void()> completion) PURE;
+  virtual void startParentShutdownSequence() PURE;
+};
+```
+
+2. DrainManagerImpl 实现
+
+```cpp
+class DrainManagerImpl : Logger::Loggable<Logger::Id::main>, public DrainManager {
+public:
+  DrainManagerImpl(Instance& server, envoy::api::v2::Listener::DrainType drain_type);
+
+  // Server::DrainManager
+  bool drainClose() const override;
+  void startDrainSequence(std::function<void()> completion) override;
+  void startParentShutdownSequence() override;
+
+private:
+  bool draining() const { return drain_tick_timer_ != nullptr; }
+  void drainSequenceTick();
+
+  Instance& server_;
+  const envoy::api::v2::Listener::DrainType drain_type_;
+  Event::TimerPtr drain_tick_timer_;
+  std::atomic<uint32_t> drain_time_completed_{};
+  Event::TimerPtr parent_shutdown_timer_;
+  std::function<void()> drain_sequence_completion_;
+};
+
+// 就是一个timer，指定的时间到达后就开始执行drain callback
+void DrainManagerImpl::startDrainSequence(std::function<void()> completion) {
+  drain_sequence_completion_ = completion;
+  ASSERT(!drain_tick_timer_);
+  drain_tick_timer_ = server_.dispatcher().createTimer([this]() -> void { drainSequenceTick(); });
+  drainSequenceTick();
+}
+
+// 不停的计数和打印
+void DrainManagerImpl::drainSequenceTick() {
+  ENVOY_LOG(trace, "drain tick #{}", drain_time_completed_.load());
+  ASSERT(drain_time_completed_.load() < server_.options().drainTime().count());
+  ++drain_time_completed_;
+
+  if (drain_time_completed_.load() < server_.options().drainTime().count()) {
+    drain_tick_timer_->enableTimer(std::chrono::milliseconds(1000));
+  } else if (drain_sequence_completion_) {
+    drain_sequence_completion_();
+  }
+}
+
+// 在hotrestart的时候，子进程通知父进程closing listener然后开始执行drain
+void InstanceImpl::drainListeners() {
+  ENVOY_LOG(info, "closing and draining listeners");
+  listener_manager_->stopListeners();
+  drain_manager_->startDrainSequence(nullptr);
+}
+```
+
+ListenerImpl实现了Network::DrainDecision接口
+
+```cpp
+bool ListenerImpl::drainClose() const {
+  // When a listener is draining, the "drain close" decision is the union of the per-listener drain
+  // manager and the server wide drain manager. This allows individual listeners to be drained and
+  // removed independently of a server-wide drain event (e.g., /healthcheck/fail or hot restart).
+  return local_drain_manager_->drainClose() || parent_.server_.drainManager().drainClose();
+}
+```
+
+
+http的conn manager每次在处理请求的时候会根据listenerImpl的drianClosed的结果来决定是否进行drain处理
+
+```cpp
+  // See if we want to drain/close the connection. Send the go away frame prior to encoding the
+  // header block.
+  if (connection_manager_.drain_state_ == DrainState::NotDraining &&
+      connection_manager_.drain_close_.drainClose()) {
+
+    // This doesn't really do anything for HTTP/1.1 other then give the connection another boost
+    // of time to race with incoming requests. It mainly just keeps the logic the same between
+    // HTTP/1.1 and HTTP/2.
+    connection_manager_.startDrainSequence();
+    connection_manager_.stats_.named_.downstream_cx_drain_close_.inc();
+    ENVOY_STREAM_LOG(debug, "drain closing connection", *this);
+  }
+```
+
+如果要进行drain处理就开始执行Drain
+
+```cpp
+void ConnectionManagerImpl::startDrainSequence() {
+  ASSERT(drain_state_ == DrainState::NotDraining);
+  drain_state_ = DrainState::Draining;
+  // http1的话什么都不做，http2则会发送GOAWAY进行优雅关闭
+  codec_->shutdownNotice();
+  drain_timer_ = read_callbacks_->connection().dispatcher().createTimer(
+      [this]() -> void { onDrainTimeout(); });
+  drain_timer_->enableTimer(config_.drainTimeout());
+}
+
+void ConnectionManagerImpl::onDrainTimeout() {
+  ASSERT(drain_state_ != DrainState::NotDraining);
+  codec_->goAway();
+  drain_state_ = DrainState::Closing;
+  checkForDeferredClose();
+}
 ```

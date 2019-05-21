@@ -110,6 +110,13 @@ spec:
   - name <string>
     image <string>
     imagePullPolicy <string> (Always(总是下载)、Never(总是使用本地)、IfNotPresent(如果本地有就使用，否则就远程拉)) 如果标签是latest就是Always，否则就是IfNotPresent (不能动态更新)
+    lifecycle:
+      postStart:  // 容器启动后(ENTRYPOINT执行之后)立刻执行的动作，是异步的，容器继续启动
+        exec:
+          command: [xxxx]
+      preStop:    // 容器被杀死之前，是同步的，会阻塞当前容器杀死的流程
+        exec:
+          command: [xxxx]
     ports: <[]Object> 容器暴露的端口，只是信息暴露，通过yaml知道这个应用暴露了哪些端口
       containerPort:
       hostIP:
@@ -118,12 +125,19 @@ spec:
       protocol: 默认TCP
     args: <[]string> 向entrypoint传递参数，代替镜像中的CMD参数
     command: <[]string> 相当于entrypoint，是不会运行在shell中的，如果不提供就运行镜像中的entrypoint
+  spec <[]Object>
   nodeSelector: <map[string]string> 选择要运行在哪类node上
   nodeName: <string> 指定要运行的node机器上
   hostPID:
   hostIPC:
+  hostAliases:  // 定义pod中的hosts文件里的内容
+    - ip: "10.1.2.3"
+      hostnames:
+      - "foo.remote"
+      - "bar.remote"
+  shareProcessNamespace: true //共享PID namespace
   hostNetwork:
-  restartPolicy: Always、OnFailure、Never、Default to Always
+  restartPolicy: Always(失败后会不断重新创建pod)、OnFailure(启动失败后，会不断重启pod中的容器)、Never、Default to Always
   env:
   -name:
    value:
@@ -138,12 +152,21 @@ Pod生命周期:
   5. 存活状态检测 liveness probe
   6. 服务可用状态检测 readiess probe
 
+
+> POD并不支持原地更新，需要有Deployment来支持
+
 状态:
-  1. Pending
-  2. Running
-  3. Failed
-  4. Succeeded
-  5. Unknown
+  1. Pending  // YAML文件提交给k8s饿，API对象已经创建并保存在Etcd中，但是Pod里面有些容器因为某种原因不能被顺利创建。
+  2. Running  // Pod已经调度成功，跟一个具体的节点绑定，它包含的容器都已经创建成功了，并且至少有一个正在运行中
+  3. Failed   // Pod里面至少有一个容器以不正常的状态(非0的返回码)退出，这个状态的出现，意味着你得想办法Debug这个容器的应用。
+  4. Succeeded // Pod里面所有的容器都正常运行完毕了，并且已经退出了。
+  5. Unknown  // 一个异常的状态，Pod的状态不能持续被kubelet汇报给kube-apiserver，可能是主节点master和kubelet间的通信出现了问题
+
+进一步又可以细分:
+PodScheduled、Ready、Initialized，以及 Unschedulable，用来描述造成当前Status的具体原因是什么?
+
+> 1. 只要Pod的restartPolicy指定的策略允许重启异常的容器(比如: Always)，那么这个Pod就会保持Running状态，并进行容器重启，否则就会进程Failed状态
+> 2. 对于包含多个容器的Pod，只有它里面所有的容器都进程异常状态后，Pod才会进程Failed状态，在此之前Pod都是Running状态。此时Pod的READY字段会显示正常容器的个数
 
 ```
 Image Entrypoint|Image Cmd|Container command|Container args|Command run
@@ -176,6 +199,37 @@ Image Entrypoint|Image Cmd|Container command|Container args|Command run
 3. HTTPGetAction
 
 > lifecyle含有postStart和preStop两个hook
+
+Projected Volume 投射数据卷，是为容器提供的预先定义好的数据
+
+1. Secret                 // 加密的key/value数据
+2. ConfigMap              // 不加密的配置数据
+3. Downward API           // 可以引用pod中的元信息(比如label、nodename、hostIp、namespace、podip、uid、annotations等等)
+4. ServiceAccountToken    // 本质上是一种特殊的Secret
+
+
+
+PodPreset用于给开发人员写的pod添加一些预设的字段
+
+```
+apiVersion: settings.k8s.io/v1alpha1
+kind: PodPreset
+metadata:
+  name: allow-database
+spec:
+  selector:
+    matchLabels:
+      role: frontend
+  env:
+    - name: DB_PORT
+      value: "6379"
+  volumeMounts:
+    - mountPath: /cache
+      name: cache-volume
+  volumes:
+    - name: cache-volume
+      emptyDir: {}
+```
 
 
 ## 控制器
@@ -261,10 +315,58 @@ spec:
 
 ## DaemonSet
 
+DaemonSet在实现的时候会给每一个Pod加上一个nodeAddinity从而保证这个Pod只会在指定的节点上启动
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd-elasticsearch
+  namespace: kube-system
+  labels:
+    k8s-app: fluentd-logging
 spec:
-  type:
-  rollingUpdate:
-    maxUnavailable:
+  selector:
+    matchLabels:
+      name: fluentd-elasticsearch
+  template:
+    metadata:
+      labels:
+        name: fluentd-elasticsearch
+    spec:
+      # 需要有一个容忍的污点，可以在master上安装，默认master是不会进行pod调度的。
+      # 当一个节点没有安装网络插件会被设置node.kubernetes.io/network-unavailable污点
+      # 所以在安装网络agent插件的时候，需要容忍这个污点
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: fluentd-elasticsearch
+        image: k8s.gcr.io/fluentd-elasticsearch:1.20
+        resources:
+          limits:
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+```
+
+
 
 ## Service
 1. userspace: 先到service ip，然后转到node上的kube-proxy，由kube-proxy向后转发
@@ -341,6 +443,7 @@ openssl req -new -x509 -key tls.key -out tls.crt -subj /C=CN/ST=Beijijng/L=xxxxx
 kubectl create secret tls NAME --cert=PATH --key=PATH
 
 ## 存储卷
+
 1. emptyDir
 2. hostPath
 3. SAN(iSCSI)、NAS、分布式存储(glusterfs、ceph-rdb、cephfs)、云存储(EBS、OSS、Azure Disk)
@@ -389,7 +492,14 @@ spec: 和pods.spec.volumes相同
 PVC根据requests来选择PV，PV的大小是事先分配好的。
 PVC如何进行动态的创建PV呢?
 
+Dynamic Provisioning
+
+1. PVC找到StorageClass
+2. StorageClass存储插件创建PV
+
+
 配置容器化应用的方式:
+
 1. 自定义命令行参数
 2. 把配置文件直接放进镜像
 3. 环境变量
@@ -397,6 +507,7 @@ PVC如何进行动态的创建PV呢?
 4. 存储卷
 
 ## ConfigMap
+
 1. 环境变量
 2. 直接当作存储卷
 
@@ -415,15 +526,12 @@ pods.spec.containers.volumes.item 指定哪些key被挂载
 
 
 ## secret
+
 1. docker registers
 2. general
 3. tls
 
 ## stateful
-1. 有状态
-2. 不同的角色、顺序依赖等
-
-
 
 1. 稳定且唯一的网络标识符
 2. 稳定且持久的存储
@@ -431,9 +539,234 @@ pods.spec.containers.volumes.item 指定哪些key被挂载
 4. 有序、平滑地删除和终止
 5. 有序的滚动更新
 
-
 三个组件: headless service、StatefulSet、volumeClaimTemplate
 名称解析: pod_name.service_name.ns_name.svc.cluster.local
 
 
+## controllerrevision
 
+专门记录某种controller对象的版本，像statefulset、daemonset的版本都是通过这个对象来管理的
+这个对象的Data字段保存了该版本对应的完整的DaemonSet的API对象，并且在Annotation字段保存了创建这个对象所使用的kubectl 命令
+
+
+## Job && CronJob
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pi
+spec:
+  # 要处理的任务数目是8
+  completions: 8
+  # 同时执行的任务数是2
+  parallelism: 2
+  template:
+    spec:
+      containers:
+      - name: pi
+        image: resouer/ubuntu-bc
+        command: ["sh", "-c", "echo 'scale=10000; 4*a(1)' | bc -l"]
+      restartPolicy: Never
+  # 最大重试次数4次(当任务执行失败的时候进行重试)
+  backoffLimit: 4
+```
+
+```yaml
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: hello
+spec:
+  # 1. concurrencyPolicy=Allow，这也是默认情况，这意味着这些 Job 可以同时存在;
+  # 2. concurrencyPolicy=Forbid，这意味着不会创建新的 Pod，该创建周期被跳过;
+  # 3. concurrencyPolicy=Replace，这意味着新产生的 Job 会替换旧的、没有执行完的 Job。
+  concurrencyPolicy: Forbid
+  # 意味着在过去 200 s 里，如果 miss 的数目达到了 100 次， 那么这个 Job 就不会被创建执行了。
+  startingDeadlineSeconds: 200
+  schedule: "*/1 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: hello
+            image: busybox
+            args:
+            - /bin/sh
+            - -c
+            - date; echo Hello from the Kubernetes cluster
+          restartPolicy: OnFailure
+```
+
+
+
+
+## Admission Controllers
+
+API对象被提交给ApiServer后做的一系列操作被称为Admission Controllers，需要给ApiServer编写代码来实现功能，默认ApiServer提供了
+许多Admission Controllers插件，但是仍然没办法满足一些需求，而且每次新增插件都需要重启。因此有了Dynamic Admission Controllers，可以热插拔。
+
+Initializer插件就是其中一种，在v1alpha1中存在，默认是disabled的。
+
+## 声明式API
+
+一个API对象在Etcd中的完整资源路径: Group + Version + Resource组成
+
+默认核心组: /api，查找的时候默认省略，比如Pod、Node等，非核心的API对象则在/apis这个层级查找
+
+一个对象提交到ApiServer的完整过程:
+1. 发起POST请求，发送yaml到ApiServer中
+2. 过滤请求(授权、超时、审计)
+3. Mux、Routes
+4. 转换成Super Version(API资源类型的所有版本的全字段全集)
+5. Admission和Validation
+
+
+
+## CRD
+
+一个CRD资源对象，资源类型是Network，组是samplecrd.k8s.io，版本是v1
+
+```yaml
+apiVersion: samplecrd.k8s.io/v1
+kind: Network
+metadata:
+  name: example-network
+spec:
+  cidr: "192.168.0.0/16"
+  gateway: "192.168.0.1"
+```
+
+资源描述
+
+```yaml
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  # 资源名(复数形式).组名
+  name: networks.samplecrd.k8s.io
+spec:
+  # 组名
+  group: samplecrd.k8s.io
+  # 版本
+  version: v1
+  names:
+    # 资源名
+    kind: Network
+    # 复数
+    plural: networks
+  # 作用域
+  scope: Namespaced
+```
+
+操作CRD资源:
+
+1. 目录结构
+
+```
+controller.go
+  crd
+    network.yaml  # CRD文件
+  example
+    example-network # Network资源文件
+  main.go
+  pkg
+    apis
+      samplecrd
+        register.go
+        v1
+          doc.go
+          register.go
+          types.go
+```
+
+2. `pkg/apis/samplecrd/register.go`
+
+一些全局变量的定义，定义GroupName、Version等
+
+```go
+package samplecrd
+
+const (
+        GroupName = "samplecrd.k8s.io"
+        Version   = "v1"
+)
+```
+
+## RBAC
+
+1. Role: 角色，它其实就是一组规则，定义一组对Kubernetes API对象的操作权限
+2. Subject: 被作用者， 既可以是人、也可以是机器，也可以是你在Kubernetes里定义的 "用户"
+3. RoleBinding: 定义了作用者和角色的绑定关系
+
+ClusterRole和ClusterRoleBinding作用于整个集群，在metadata中不需要指定namespace
+
+```yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: mynamespace
+  name: example-role
+rules: # 限制哪个api、哪个资源类型、允许的操作。
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+```
+
+将role绑定到k8s中的User
+
+```yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: example-rolebinding
+  namespace: mynamespace
+subjects:
+  # 授权系统中的逻辑概念，它需要通过外部认证服务来进行授权
+  # 还可以使用k8s管理的内置用户，也就是ServiceAccount
+- kind: User
+  name: example-user
+  # ? 为什么要加这个apiGroup
+  #  APIGroup holds the API group of the referenced subject. Defaults to "" for
+  #  ServiceAccount subjects. Defaults to "rbac.authorization.k8s.io" for User
+  #  and Group subjects.
+  apiGroup: rbac.authorization.k8s.io
+# 引用role
+roleRef:
+  kind: Role
+  name: example-role
+  apiGroup: rbac.authorization.k8s.io
+```
+
+对于ServiceCount来说，k8s会给每一个ServiceCount自动创建并分配一个Secret对象。这个对象就是用来和APIServer进行交互的授权文件，一般称为token
+用户的POD可以指定使用这个ServiceCount，否则k8s会把一个叫default的service count绑定到pod中。
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: mynamespace
+  name: sa-token-test
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.7.9
+  serviceAccountName: example-sa
+```
+
+使用ServiceCount Group
+
+```yaml
+subjects:
+ - kind: Group
+ # system:serviceaccounts:<Namespace 名字>
+ name: system:serviceaccounts:mynamespace
+ apiGroup: rbac.authorization.k8s.io
+```
+
+## 日志收集
+
+1. Node上部署logging agent，将日志文件转发到后端存储里面，要求容器中的应用输出日志到stdout和stderr
+2. SideCar容器将应用容器中的日志文件输出到stdout和stderr，然后再有logging agent采集
+3. SideCar容器部署logging直接将应用容器产生的日志文件采集到远端存储
