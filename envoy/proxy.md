@@ -794,9 +794,77 @@ Cluster warming，当server启动的时候或者通过CDS初始化Cluster时，C
 对于新增集群处于warmed状态来说，如果HTTP router路由到这个集群，此时会返回404/503(依据配置来)
 对于更新已有集群的情况来说，在更新的集群还没有初始化完成之前，使用老的集群来分发流量
 
+ClusterManager 管理连接池和load balancing，在多个work线程共享这个对象
+
+
+## Load balancer
+
+一个集群下面可以配置多个Priority和多个Locality，每一个Priority和Locality可以包含一组endpoint，Priority和Locality是多对多的关系
+也就是说一个Priority可以包含多个Locality的机器列表，一个Locality也可以包含多个priority，当一个priority中的主机不可用/不健康的时候
+会去从下一个priority中进行选择。
+
+PrioritySetImpl 包含了一个集群下的所有host，然后按照priority维度对给定集群进行分组，一个集群会有多个Priority
+HostSetImpl 按照priority来维护一组host集合，构造函数需要提供priority，然后通过updateHosts来添加host。这组host可能来自于多个Locality
+HostDescriptionImpl 对upstream主机的一个描述接口，比如是否是canary、metadata、cluster、healthChecjer、hostname、address等
+HostImpl 代表一个upstream Host
+HostPerLocalityImpl 按照locality的维度组织host集合，核心数据成员`std::vector<HostVector>`，第一个host集合是local locality。
+PriorityStateManager 管理一个集群的PriorityState，而PriorityState则是按照priority分组维护的一组host和对应的locality weight map
+
+
+PrioritySetImpl包含了多个HostSetImpl，一个HostSetImpl则包含了一个HostPerLocalityImpl。
+
+
+```yaml
+ClusterLoadAssignment.Policy
+{
+  "drop_overloads": [],
+  "overprovisioning_factor": "{...}",
+  "endpoint_stale_after": "{...}"
+}
+```
+overprovisioning_factor一个过度配置的因子，默认是140，当一个priority或者一个locality中的健康主机百分比乘以这个因子小于100，那么就认为这个priority或者locality是不健康的。
+
+
+## Degraded endpoints
+
+Envoy支持将某些endpoint标记为degraded的，这种类型的endpoint可以接收流量，但是只有在没有足够的健康机器的时候才会接收流量来处理
+上游主机通过在返回的header中添加`x-envoy-degraded`头来表明当前的健康检查的主机是degraded。
+
+## Priority levels
+
+当某一个Priority是健康的，那么会接收全部流量，但是如果发现流这个Priority是不健康的，那么就需要按照100%比将流量打到下一个优先级。
+比如健康程度是71%，那么0.71 * 140约等于99%，那么这个Priorit就接收99%的流量，剩下的1%流量就发送到下一个Priority。如果所有的Priority加起来的健康程度不满足100%，还需要
+将流量按比例缩放。比如有两个Priority，第一个Priority的健康程度是20%，第二个是30%，总的健康程度只有50%，那么流量就会往第一个Priority打40，第二个Priority打60%，而不是
+0.2 * 140的流量打到第一个Priority了。
+
+## Panic threshold
+
+正常情况下Envoy做负载均衡的时候，会考虑到healthy和degraded的机器所占的比例。但是如果这个比例太低的情况下，Envoy则不考虑健康状况会在所有的机器上进行balancer，而这个被称为panic，
+这个比例是panic阀值，默认是50%。如果host的健康程度低于72%就会将流量打向低一级的Priority，如果所有的Priority的健康程序程度比例加起来少于100%，那么哪个优先级低于50%，那么这个优先级
+就处于panic模式，流量是发到这个Priority下所有的机器。如果所有的Priority的健康程序程度比例加起来等于或大于100%就都不会出现panic模式，即使某些Priority的健康程度是小于50%的。
 
 ## Zone aware routing
 
+1. 要求始发集群和upstream集群不是panic mode
+2. Zone aware routing是开启的(配置中的`routing_enabled`字段表示进行zone aware的请求百分百，默认是100%)
+3. 始发集群和upstream集群有相同的zone数量
+4. upstream集群有足够的机器(`min_cluster_size` zone aware集群的最小大小)
+5. 如果始发集群中的本地zone占比要比upstream集群中的本地zone占比高的话，那么Envoy会按照本地zone所在占比例只转发部分流量到upstream集群中，剩余的流量进行跨区域转发
+6. 如果始发集群中的本地zone占比要比upstream集群中的本地zone占比小的话，所有的流量都会直接打到upstream中的本地zone
+
+需要定一个一个本地集群，这个集群就是Envoy网格组成的集群
+
+```yaml
+cluster_manager:
+  local_cluster_name: "local_cluster_name"
+```
+
+```yaml
+{
+  "routing_enabled": "{...}",
+  "min_cluster_size": "{...}"
+}
+```
 
 ## Load Ststs reporter
 
@@ -832,14 +900,31 @@ TODO(tianqian.zyf): 例子
 
 本质上是将一个集群拆分成多个子集群，Envoy中称为subset，而subset的划分是根据每一个endpoint中携带的metadata来组织subset集合。
 
+```yaml
+{
+  "fallback_policy": "...",
+  "default_subset": "{...}",
+  "subset_selectors": [],
+  "locality_weight_aware": "...",
+  "scale_locality_weight": "...",
+  "panic_mode_any": "..."
+}
+```
 
-* Fallback策略:
+* fallback_policy:
 
   1. NO_ENDPOINT 如果没有匹配的subset就失败
   2. ANY_ENDPOINT 如果没有匹配的subset就从整个集群中按照负载均衡的策略来选择
   3. DEFAULT_SUBSET 匹配指定的默认subset，如果机器都没有指定subset那么就使用ANY_ENDPOINT
 
-* Selecting Subsets
+* default_subset
+
+指定一个set集合，用来在fallback的时候，进行选择
+
+* locality_weight_aware
+
+
+* subset_selectors
 
 用来表明subset如何生成，下面这个例子就是表明带有a和b的metadata的机器会组成一个subset。如果一个机器带有a、b、x三个metadata，
 那么这台机器就会属于两个subset。
@@ -852,6 +937,14 @@ TODO(tianqian.zyf): 例子
   ]
 }
 ```
+* locality_weight_aware
+
+* scale_locality_weight
+
+* panic_mode_any
+
+默认子集不为空，但是通过fallback策略使用默认子集的时候，仍然没有选择到主机，那么通过这个选项会使得从所有机器中选择一台机器来进行路由
+
 
 * Example
 

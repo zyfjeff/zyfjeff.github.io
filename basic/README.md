@@ -173,3 +173,6 @@ Idx Name          Size      VMA       LMA       File off  Algn
         orl     $(CR0_PE|CR0_PG|CR0_WP), %eax
         movl    %eax, %cr0
 ```
+
+
+## 如何获取调用链?

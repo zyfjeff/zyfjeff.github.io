@@ -1,6 +1,21 @@
 ## eBPF原理
 
 
+## BPF basic
+
+11个64位寄存器、r0 用于保存返回值，r1~r5用于保存bpf调用的参数、r6~r9用于被调用的函数在内部使用
+执行BPF程序的时候，寄存器r1用户存放context，不同类型的程序其context内容不同。
+
+## bpf helper function
+
+```cpp
+
+bpf_map_lookup_elem
+bpf_map_update_elem
+bpf_map_delete_elem
+bpf_map_push_elem
+
+```
 
 ## XDP generic 和 XDP native
 前者是在网卡收到包后，创建skb的时候(需要设置XDP_FLAGS_SKB_MODE启用)，作用在Linux内核层面，

@@ -80,9 +80,6 @@ top、ps、pidstat这些都是基于一段间隔来统计和计算，没办法�
 
 2. 直接IO读磁盘，导致iowait升高，但是CPU使用率不高，load也升高了。
 
-3.
-
-
 
 ## 基本原理
 
@@ -191,5 +188,24 @@ in memory, where each page is divided by the number of processes sharing it.
 So if a process has 1000 pages all to itself, and 1000 shared with one other
 process, its PSS will be 1500.
 
+
+## Linux perf
+
+perf record -e 事件/probe options
+
+-a trace all cpu
+-g capture call graphs
+
+* Counting Events:
+
+perf stat:
+
+-d Detailed CPU counter statistics
+-p specified PID
+-a CPU counter statistics for the entire system
+
 ## Link
 [理解 %IOWAIT (%WIO)](http://linuxperf.com/?p=33)
+
+
+

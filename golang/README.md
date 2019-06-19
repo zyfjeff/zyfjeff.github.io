@@ -9,7 +9,6 @@ var y int16 = int16(x)
 
 
 * range会复制目标数据，受直接影响的是数组，可改用数组指针或切片类型
-
 * 字典切片都是引用类型，拷贝开销低
 * 编译器会进行逃逸分析将栈上变量分配在堆上
 * go build -gcflags "-l -m" 禁用函数内联(-l)，输出优化信息(-m)
@@ -144,6 +143,36 @@ func WaitSignal(stop chan struct{}) {
 	<-sigs
 	close(stop)
 	_ = log.Sync()
+}
+```
+
+## Go Pattern
+
+* PubSub
+
+* Worker Scheduler
+
+* Replicated service client
+
+* Protocol multiplexer
+
+```golang
+type ProtocolMux interface {
+  Init(Service)
+  Call(Msg) Msg
+}
+
+type Service interface {
+  ReadTag(Msg) int64
+  Send(Msg)
+  Recv() Msg
+}
+
+type Mux struct {
+  srv Service
+  send  chan Msg
+  mu sync.Mutex
+  pending map[int64]chan<- Msg
 }
 ```
 

@@ -15,43 +15,12 @@
 /// e ⇒ LowerExp
 /// E ⇒ UpperExp
 ```
-* 全局常量
-
-1. `const` 不可改变的值（常用类型)
-2. `static` 在`'static` 生命周期内可能发生改变的变量
-3. 常量的名字必须是全大写，如果是多个单词组成就用下划线来连接，必须指明类型
-
-> static variable `mAX_HEALTH` should have an upper case name such as `M_AX_HEALTH`
-
-* 变量名前缀使用`_`表示这是一个`unused variable`。
-
-* `struct`默认没有实现Copy语义，即使其中包含的成员都是值语义的，除非给这个`struct`指定`Copy`、`Clone`等。
-
-* Rust中变量是可以隐藏的，再次声明和定义变量的时候会覆盖之前声明定义的变量。
-
-* Rust中的类型之间是不允许隐式转换的，需要通过as来显示的进行类型转换。
-
-* Rust中一个{}就是一个块作用域，不同块作用域中的相同变量名之间会覆盖，优先查找当前块作用域中的变量。
-
-* Rust中通过as来进行类型转换
-
-* 当一个变量存在引用的时候，是不能对其进行move的，这会导致引用失效
-
-* Rust中变量默认不可变，不能重新绑定，如果希望变量可以修改需要添加mut前缀
-
-> cannot assign twice to immutable variable
 
 * 通过type可以给类型取别名，但是别名的名字必须是`CamelCase`驼峰格式否则编译器会产生警告，通过`#[allow(non_camel_case_types)]`可以关闭编译器的警告
 
 * rust使用()来表示空值，大小是0，是unit type的唯一值，用来表示一个函数或者一个表达式没有返回任何值，()和其他语言中的null不一样，()不是值。
 
-* `Vec<T>`相当于C++中的vector，其索引必须是usize类型。
-
-* `assert!`、`assert_eq!`、`unimplemented!()`、`unreachable!`、`panic!`、`format!`
-
 * `self`(this指针)、`Self`(类型本身)
-
-* 下划线开头的变量会当场析构
 
 * `std::mem::drop` 可以立即析构一个对象语义的变量(本质上是将其移动到函数作用域内)
 
@@ -269,9 +238,11 @@ fn apply_to_3<F>(f: F) -> i32 where
 
 * borrowing
 
-1. When data is immutably borrowed, it also freezes. Frozen data can't be modified via the original object until all references to it go out of scope:
-2. Data can be immutably borrowed any number of times, but while immutably borrowed, the original data can't be mutably borrowed.
-On the other hand, only one mutable borrow is allowed at a time. The original data can be borrowed again only after the mutable reference goes out of scope
+1. When data is immutably borrowed, it also freezes.
+Frozen data can't be modified via the original object until all references to it go out of scope:
+2. Data can be immutably borrowed any number of times, but while immutably borrowed,
+the original data can't be mutably borrowed. On the other hand, only one mutable borrow is allowed at a time.
+The original data can be borrowed again only after the mutable reference goes out of scope
 
 ```rust
 fn main() {
@@ -733,6 +704,46 @@ fn main() {
 }
 ```
 
+* `std::mem::uninitialized`
+
+1. 初始化数组的时候，如果数组中的元素不是Copy类型的数据，那么就需要使用到`std::mem::uninitialized`
+2. 和libc交互的时候，声明一个变量，这个变量要被libc初始化
+
+```rust
+use std::mem;
+use std::ptr;
+
+// Only declare the array. This safely leaves it
+// uninitialized in a way that Rust will track for us.
+// However we can't initialize it element-by-element
+// safely, and we can't use the `[value; 1000]`
+// constructor because it only works with `Copy` data.
+let mut data: [Vec<u32>; 1000];
+
+unsafe {
+    data = mem::uninitialized();
+    for elem in &mut data[..] {
+        ptr::write(elem, Vec::new());
+    }
+}
+println!("{:?}", &data[0]);
+```
+
+```rust
+impl PlatformInfo {
+    pub fn new() -> io::Result<Self> {
+        unsafe {
+            let mut uts: utsname = mem::uninitialized();
+            if uname(&mut uts) == 0 {
+                Ok(Self { inner: uts })
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        }
+    }
+}
+```
+
 ## Link
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)
 * [System V ABI read zone](https://os.phil-opp.com/red-zone/)
@@ -740,3 +751,7 @@ fn main() {
 * [Too Many Linked Lists](https://rust-unofficial.github.io/too-many-lists/)
 * [Interior mutability in Rust: what, why, how?](https://ricardomartins.cc/2016/06/08/interior-mutability)
 * [& vs. ref in Rust patterns](http://xion.io/post/code/rust-patterns-ref.html)
+
+
+
+1. 为什么没办法把vec中的元素move出来?
