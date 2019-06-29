@@ -716,7 +716,12 @@ FilterA::onNewConnection->FilterA::onData->FilterB::onNewConnection->FilterB::on
 
 3. Trigger 每一个OverloadAction会包含一个触发器，里面设置了阀值，提供了isFired来表明当前触发器是否触发了
 
-4. Resource 每一个资源Monitor和一个Resource关联起来，这个Resource提供了
+4. Resource 每一个资源Monitor和一个Resource关联起来
+
+5. 相关的stats
+
+  * failed_updates 资源更新失败的次数
+  * skipped_updates 已经有资源在更新了，新的资源更新就跳过
 
 Setp1: 实现核心接口
 
@@ -728,6 +733,7 @@ public:
   public:
     virtual ~Callbacks() {}
     virtual void onSuccess(const ResourceUsage& usage) = 0;
+    // 资源获取失败的时候，没办法更新资源就回调onFailure
     virtual void onFailure(const EnvoyException& error) = 0;
   };
   virtual void updateResourceUsage(Callbacks& callbacks) = 0;
@@ -1299,3 +1305,6 @@ void ConnectionManagerImpl::onDrainTimeout() {
   checkForDeferredClose();
 }
 ```
+
+
+## HTTP dynamic forward proxy

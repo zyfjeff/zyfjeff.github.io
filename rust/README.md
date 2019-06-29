@@ -22,7 +22,41 @@
 
 * `self`(this指针)、`Self`(类型本身)
 
+* 没有receive，或者说receive的类型是`&Self|Self`，但是只要参数的名字不是self，就是静态方法，就不能使用`.`号来调用
+
 * `std::mem::drop` 可以立即析构一个对象语义的变量(本质上是将其移动到函数作用域内)
+
+* `<T as TraitName>::item` Fully Qualified Syntax提供一种无歧义的函数调用语法
+
+* `trait Derived:Base{}` 等同于 `trait Derived where Self:Base{}`
+
+* 偏序(`std::cmp::PartialOrd`)和全序(`std::cmp::Ord`)，浮点数不符合(NaN的存在，浮点数无法排序)偏序关系，不满足反对称、传递性、完全性
+
+* `std::ops::Index trait`用于实现索引操作，`std::ops::IndexMut trait`用于实现索引写操作
+
+* `@符号绑定变量`，用来获取到match的值
+
+* 带有析构函数的类型都是不能满足Copy语义的
+
+* 有`where T:‘static`的约束，意思则是，类型T里面不包含任何指向短生命周期的借用指针，意思是要么完全不包含任何借用，要么可以有指向`‘static`的借用指针。
+
+* 函数参数直接解构
+
+```rust
+struct T {
+    item1: char,
+    item2: bool,
+}
+
+fn test(
+    T {
+        item1: arg1,
+        item2: arg2,
+    }: T
+) {
+    println!("{} {}", arg1, arg2);
+}
+```
 
 * Closure 默认是引用捕获，可以通过move来做take Ownership，但是实际上上并不一定是move，有可能是copy
 * Closure Traits
@@ -586,7 +620,7 @@ trait Error: Debug + Display {
 }
 ```
 
-  12. `Box<Error>` 使用这个错误类型，而不是具体的类型。
+  12. `Box<Error>` 使用这个错误类型，而不是具体的类型，但是不能向下转型，没办法拿到进一步的错误信息
 
   13. `expect`  如果是None就`panic!`，并输出一段自定义的错误消息。
 
@@ -743,6 +777,189 @@ impl PlatformInfo {
     }
 }
 ```
+
+## crate and mod
+
+crate是Rust中独立的编译单元，每一个crate对应生成一个库，或者是可执行文件。
+mod可以简单理解成命名空间，mod可以嵌套，还可以控制内部元素的可见性，mod可以循环引用，crate之间不可以，rust需要把整个crate全部load才能执行编译。
+
+版本号的模糊匹配:
+
+* ^1.2.3 ==> 1.2.3 <= version < 2.0.0 (默认行为，直接写一个固定版本号)
+* ~1.2.3 ==> 1.2.3 <= version < 1.3.0
+* 1.* ==> 1.0.0 <= version < 2.0.0
+
+1. 可以指定官方仓库中的crate
+2. 可以指定本地的crate
+3. 可以指定git
+
+`pub use` 重新导出模块中的元素，使得导出的元素，成为当前模块的一部分
+
+指定方法的可见行:
+
+* pub(crate)
+* pub(in xxx_mod)
+* pub(self) 或者 pub(in self) pub(super) 或者 pub(in super)
+
+
+
+`#[non_exhaustive]` 新增enum成员的时候，不破坏兼容性
+
+
+
+## FFI
+
+Rust和C是ABI兼容的，但是需要满足一些条件
+
+1. 使用`extern C`修饰的
+2. 使用#[no_mangle]修饰的函数
+3. 函数参数、返回值中使用的类型，必须是在Rust和C中具备同样的内存布局
+
+
+* C调用Rut
+
+Step1: 按照上述规则编写Rust接口，提供给C调用
+
+```rust
+#[no_mangle]
+   pub extern "C" fn rust_capitalize(s: *mut c_char)
+   {
+       unsafe {
+           let mut p = s as *mut u8;
+           while *p != 0 {
+               let ch = char::from(*p);
+               if ch.is_ascii() {
+                   let upper = ch.to_ascii_uppercase();
+                   *p = upper as u8;
+               }
+               p = p.offset(1);
+           }
+} }
+```
+
+Step2: 编译成C的静态库
+
+```
+rustc --crate-type=staticlib capitalize.rs
+```
+
+Step3: 编写C代码开始调用
+
+```C
+#include <stdlib.h>
+  #include <stdio.h>
+  // declare
+  extern void rust_capitalize(char *);
+  int main() {
+      char str[] = "hello world";
+      rust_capitalize(str);
+      printf("%s\n", str);
+      return 0;
+}
+```
+
+`gcc -o main main.c -L. -l:libcapitalize.a -lpthread -ldl`
+
+
+* Rust调用C库
+
+Step1: 编译好C的静态库
+
+Step2: 在Rust中使用`#[link = "library_name"]`来找到对应的静态库，并通过`extern "C"`进行方法的声明
+
+```rust
+  use std::os::raw::c_int;
+   #[link(name = "simple_math")]
+   extern "C" {
+       fn add_square(a: c_int, b: c_int) -> c_int;
+   }
+   fn main() {
+       let r = unsafe { add_square(2, 2) };
+       println!("{}", r);
+}
+```
+
+对于一些复杂数据类型，可以通过struct并添加`#[repr(C)]`来保证和C的内存布局一致来组合复杂的数据类型
+
+Step3: 编译运行
+
+指定静态库的搜索路径
+
+`rustc -L . call_math.rs`
+
+
+
+## 文档和测试
+
+* `///`开头的文档被视为是给它后面的那个元素做的说明
+* `//!` 开头的文档被视为是给包含这块文档的元素做的说明
+
+Rust文档里面的代码块，在使用cargo test命令时，也是会被当做测试用例执行的。
+文档内部支持markdown格式
+
+`#[doc(include = "external-doc.md")]` 直接引用外部文档
+
+`#[cfg]`它主要是用于实现各种条件编译。比如`#[cfg(test)]`意思是，这部分代码只在test这个开关打开的时候才会被 编译。
+
+```rust
+#[cfg(any(unix, windows))]
+#[cfg(all(unix, target_pointer_width = "32"))]
+#[cfg(not(foo))]
+#[cfg(any(not(unix), all(target_os="macos", target_arch = "powerpc")))]
+```
+
+自定义开关
+
+```rust
+[features]
+# 默认开启的功能开关
+default = []
+
+# 定义一个新的功能开关,以及它所依赖的其他功能
+# 我们定义的这个功能不依赖其他功能,默认没有开启
+my_feature_name = []
+
+// 然后在代码中进行引用
+#[cfg(feature = "my_feature_name")]
+  mod sub_module_name {
+  }
+
+这个功能是否开启，可以通过命令行进行传递
+cargo build --features "my_feature_name"
+```
+
+`#[ignore]`标记测试用例，暂时忽略这个测试
+`#[bench]`添加性能测试用例
+
+## DST
+
+* DST(胖指针)的设计，避免了数据类型作为参数传递时自动退化为裸指针类型，丢失长度信息的问题，保证了类型安全。
+* enum中不能包含DST类型，struct中只有最后一个元素可以是DST，其他地方不行，如果包含有DST类型，那么这个结构体也就成了DST类型
+
+## macro
+
+item、block、stmt、 pat、expr、ty、itent、path、tt
+
+```rust
+macro_rules! MACRO_NAME {
+}
+```
+
+
+hashmap宏的使用例子:
+
+```rust
+macro_rules! hashmap {
+    ($key: expr => $val: expr) => {
+        {
+        let mut map = ::std::collections::HashMap::new();
+        map.insert($key, $val);
+        map
+        }
+    }
+}
+```
+
 
 ## Link
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)
