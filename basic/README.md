@@ -176,3 +176,54 @@ Idx Name          Size      VMA       LMA       File off  Algn
 
 
 ## 如何获取调用链?
+
+
+
+
+## 网络基础
+
+1. ARP和GARP
+
+ARP协议工作在二层，用于获取IP地址对应的mac地址，报文的格式为`who has [IP_B], tell [IP_A]`，包含了要查询的IP地址，以及自己的IP地址和Mac地址信息
+但是如果要查询的地址就是自己的地址，这个时候称为是GARP(Gratuitous ARP)，也就是免费的ARP，这种报文是允许的，有两个作用。
+
+  * 用来探测IP冲突的问题，如果真的有人响应这个报文，说明局域网中有和自己相同IP的机器存在
+  * 用来更新自己的Mac地址信息，当自己的Mac地址发生变化的时候，可以通过这种报文主动通知网络中的其他主机更新自己的ARP缓存
+
+
+
+
+## Debuger、Compiler、ELF
+
+通过编译器的`-g`参数可以产生debug信息，最为重要的是`debug_line`、`debug_info`两类，前者用来提供行号信息，后者就是著名的`DWARF`提供调试信息。
+`debug_line`的格式如下:
+
+
+```
+.debug_line: line number info for a single cu
+Source lines (from CU-DIE at .debug_info offset 0x0000000b):
+
+            NS new statement, BB new basic block, ET end of text sequence
+            PE prologue end, EB epilogue begin
+            IS=val ISA number, DI=val discriminator value
+<pc>        [lno,col] NS BB ET PE EB IS= DI= uri: "filepath"
+0x004004c0  [   1, 0] NS uri: "/home/tianqian-zyf/debuger/first.cc"
+0x004004cb  [   2,10] NS PE
+0x004004d3  [   3,10] NS
+0x004004db  [   4,14] NS
+0x004004df  [   4,16]
+0x004004e3  [   4,10]
+0x004004e7  [   5, 7] NS
+0x004004ef  [   6, 5] NS
+0x004004f6  [   6, 5] NS ET
+```
+
+包含了一些说明信息，已经地址和行号的对应关系:
+
+* NS表示一个新的语句
+* BB 表示一个基本的block
+* ET 表示一个编译单元的结束
+* PE 是一个函数的开始
+
+
+* [dwarfdump](https://www.prevanders.net/dwarf.html#releases)

@@ -38,7 +38,36 @@
 
 * 带有析构函数的类型都是不能满足Copy语义的
 
+* 为什么`Cell`要求类型必须是Copy的，而不是Clone
+
+* `#![allow(overflowing_literals)]` 关闭
+
+因为Cell::get的时候，返回的是一个新的实例，如果是clone的话，会导致调用clone方法，而clone方法要求传递一个引用，那么如果用户自定义了clone方法
+就可以通过这个方法拿到内部的数据的引用。
+
 * 有`where T:‘static`的约束，意思则是，类型T里面不包含任何指向短生命周期的借用指针，意思是要么完全不包含任何借用，要么可以有指向`‘static`的借用指针。
+
+* Rust中默认的“取引用”、“解引用”操作是互补抵消的关系， 互为逆运算。但是，在Rust中，只允许自定义“解引用”，不允许自定义“取引用”。
+  如果类型有自定义“解引用”，那么对它执行“解引用”和“取引用”就不再是互补抵消的结果了。先`&`后`*`以及先`*`后`&`的结果是不同的。
+
+* match后面的变量不会自动调用defer
+
+```rust
+
+fn main() {
+  let s = String::new();
+  match &s {
+    "" => {}
+    _ => {} }
+  }
+```
+
+可以改成下面几种形式，来主动解引用:
+
+1. `match &*s`
+2. `match s.as_ref`
+3. `match s.borrow`
+4. `match &s[..]`
 
 * 函数参数直接解构
 
@@ -76,6 +105,7 @@ pub trait FnOnce<Args> {
       fn call_once(self, args: Args) -> Self::Output;
 }
 ```
+
 * try!，遇到错误的时候提前return
 
 ```rust
@@ -634,6 +664,21 @@ trait From<T> {
 
   15. `failure::Error` `failure` crate，类似于`Box<Error>`，但是这个crate额外可以打印backtraces，以及好的向下转型的支持。
 
+  16. `map_or` 提供默认值，和map不同的时候，这个返回值和提供的默认值类型一致，而不是用`option`再包装一次
+
+```rust
+pub fn map_or<U, F>(self, default: U, f: F) -> U
+where
+    F: FnOnce(T) -> U,
+
+
+let x = Some("foo");
+assert_eq!(x.map_or(42, |v| v.len()), 3);
+
+let x: Option<&str> = None;
+assert_eq!(x.map_or(42, |v| v.len()), 42);
+```
+
 * 内部可变性
 
 对象是不可变的，但是又需要某些情况下内部的一些字段是可变的，典型的像Rc、Mutex等，Rc在赋值的时候，希望内部的引用计数可以递增。但是Rc自身是不可变的。
@@ -812,7 +857,7 @@ mod可以简单理解成命名空间，mod可以嵌套，还可以控制内部�
 Rust和C是ABI兼容的，但是需要满足一些条件
 
 1. 使用`extern C`修饰的
-2. 使用#[no_mangle]修饰的函数
+2. 使用`#[no_mangle]`修饰的函数
 3. 函数参数、返回值中使用的类型，必须是在Rust和C中具备同样的内存布局
 
 
@@ -938,7 +983,19 @@ cargo build --features "my_feature_name"
 
 ## macro
 
-item、block、stmt、 pat、expr、ty、itent、path、tt
+item、block、stmt、 pat、expr、ty、
+
+1. itent (is used for variable/function names)
+2. path
+3. tt ((token tree)
+4. item
+5. block
+6. stmt (statement)
+7. pat (pattern)
+8. expr (is used for expressions)
+9. ty (type)
+10. literal (is used for literal constants)
+11. vis(visibility qualifier)
 
 ```rust
 macro_rules! MACRO_NAME {
@@ -960,15 +1017,100 @@ macro_rules! hashmap {
 }
 ```
 
+> 宏可以重载，也可以重复递归调用
+> 宏的参数可以使用+号来表示重复1到多次、或者使用*表示重复0到多次
+
+
+## 函数没有参数，但是却包含了生命周期参数，那么默认是'static
+
+```rust
+// `print_refs` takes two references to `i32` which have different
+// lifetimes `'a` and `'b`. These two lifetimes must both be at
+// least as long as the function `print_refs`.
+fn print_refs<'a, 'b>(x: &'a i32, y: &'b i32) {
+    println!("x is {} and y is {}", x, y);
+}
+
+// A function which takes no arguments, but has a lifetime parameter `'a`.
+fn failed_borrow<'a>() {
+    let _x = 12;
+
+    // ERROR: `_x` does not live long enough
+    // _x的生命周期显然没有'static长
+    //let y: &'a i32 = &_x;
+    // Attempting to use the lifetime `'a` as an explicit type annotation
+    // inside the function will fail because the lifetime of `&_x` is shorter
+    // than that of `y`. A short lifetime cannot be coerced into a longer one.
+}
+
+fn main() {
+    // Create variables to be borrowed below.
+    let (four, nine) = (4, 9);
+
+    // Borrows (`&`) of both variables are passed into the function.
+    print_refs(&four, &nine);
+    // Any input which is borrowed must outlive the borrower.
+    // In other words, the lifetime of `four` and `nine` must
+    // be longer than that of `print_refs`.
+
+    // 生命周期默认是'static
+    failed_borrow();
+    // `failed_borrow` contains no references to force `'a` to be
+    // longer than the lifetime of the function, but `'a` is longer.
+    // Because the lifetime is never constrained, it defaults to `'static`.
+}
+
+```
+
+## 当数据被不可变借用的时候，那么将无法通过原来可变的变量进行数据的修改
+
+```rust
+fn main() {
+    let mut _mutable_integer = 7i32;
+    {
+        // Borrow `_mutable_integer`
+        // 做了不可变的借用
+        let _large_integer = &_mutable_integer;
+        // Error! `_mutable_integer` is frozen in this scope
+        // 导致原来的的无法修改
+        _mutable_integer = 50;
+        // FIXME ^ Comment out this line
+        // `_large_integer` goes out of scope
+    }
+    // Ok! `_mutable_integer` is not frozen in this scope
+    _mutable_integer = 3;
+}
+```
+
+## 当数据被move的时候可以改变其可变性
+
+```rust
+fn main() {
+    let immutable_box = Box::new(5u32);
+
+    println!("immutable_box contains {}", immutable_box);
+
+    // Mutability error
+    //*immutable_box = 4;
+
+    // *Move* the box, changing the ownership (and mutability)
+    let mut mutable_box = immutable_box;
+
+    println!("mutable_box contains {}", mutable_box);
+
+    // Modify the contents of the box
+    *mutable_box = 4;
+
+    println!("mutable_box now contains {}", mutable_box);
+}
+```
+
 
 ## Link
+
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)
 * [System V ABI read zone](https://os.phil-opp.com/red-zone/)
 * [disbale SIMD](https://os.phil-opp.com/disable-simd/)
 * [Too Many Linked Lists](https://rust-unofficial.github.io/too-many-lists/)
 * [Interior mutability in Rust: what, why, how?](https://ricardomartins.cc/2016/06/08/interior-mutability)
 * [& vs. ref in Rust patterns](http://xion.io/post/code/rust-patterns-ref.html)
-
-
-
-1. 为什么没办法把vec中的元素move出来?

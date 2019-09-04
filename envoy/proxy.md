@@ -402,7 +402,9 @@ Reference: https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt
 
 ## TLS Inspector filter
 
-TLS Inspector listener filter allows detecting whether the transport appears to be TLS or plaintext, and if it is TLS, it detects the Server Name Indication and/or Application-Layer Protocol Negotiation from the client. This can be used to select a FilterChain via the server_names and/or application_protocols of a FilterChainMatch.
+TLS Inspector listener filter allows detecting whether the transport appears to be TLS or plaintext, and if it is TLS,
+it detects the Server Name Indication and/or Application-Layer Protocol Negotiation from the client.
+This can be used to select a FilterChain via the server_names and/or application_protocols of a FilterChainMatch.
 
 
 1. 注册读数据，等待数据到来
@@ -451,6 +453,7 @@ Network level filters can also share state (static and dynamic) among themselves
 
 
 ## HTTP routing
+
 1. 基于Virtual hosts的路由
 2. 前缀匹配、或者是精确匹配(大小写敏感或者不敏感都可以)，目前还不支持基于正则的匹配。
 3. TLS redirection
@@ -592,6 +595,8 @@ response_nonce:
 
 > 如果请求被接收了，那么envoy会进行ack，返回的response_nonce对应DiscoveryResponse中的nonce，version_info则对应DiscoveryResponse中的version_info
 > 如果拒绝了DiscoveryResponse则返回的response_nonce对应DiscoveryResponse中的nonce，version_info则对应上一次DiscoveryResponse中的version_info
+> 同一时间有多个DiscoveryRequest的时候，mangement server只会影响最后的一个DiscoverRequest
+> 如果管理server返回的response_nonce是一个新的值，Envoy会拒绝这次请求
 
 LDS/CDS的resource_names一般为空，表示获取所有的cluster和listener资源，而EDS和RDS一般会带上resource name获取感兴趣的资源，这个resource name来自于LDS和CDS。
 如果一个EDS没有对应的CDS，那么这个EDS是无效的，Envoy会忽略这个EDS。
@@ -622,6 +627,43 @@ In this case the response_nonce is set to the nonce value in the Response. ACK o
 
 * Spontaneous DeltaDiscoveryRequest from the client.
 This can be done to dynamically add or remove elements from the tracked resource_names set. In this case response_nonce must be omitted.
+
+
+```yaml
+DeltaDiscoveryRequest
+{
+  "node": "{...}",
+  "type_url": "...",
+  "resource_names_subscribe": [],
+  "resource_names_unsubscribe": [],
+  "initial_resource_versions": "{...}",
+  "response_nonce": "...",
+  "error_detail": "{...}"
+}
+
+DeltaDiscoveryResponse
+{
+  "system_version_info": "...",
+  "resources": [],
+  "type_url": "...",
+  "removed_resources": [],
+  "nonce": "..."
+}
+```
+
+目前增量的xDS只有grpc版本的，没有REST版本，要求`response_nonce`字段必须成对出现，而全量xDS则不需要，`system_version_info`字段用于debug目的。
+
+`DeltaDiscoveryRequest`用于几个场景:
+
+1. xDS建立后发起的第一次请求
+2. 作为ACK/NACK对于前一个`DeltaDiscoveryResponse`进行响应，其response_nonce的值为前一个`DeltaDiscoveryResponse`中的值，至于是ACK还是NACK取决于`error_detail`是否存在
+3. client主动发起`DeltaDiscoveryRequest`请求，用于动态添加和移除跟踪的资源，在这种情况下`response_nonce`必须为空
+
+> 哪些情况需要动态添加和移除跟踪的资源?
+
+当发生连接段掉的情况下，客户端重新连接后需要告知自己所拥有的资源名(initial_resource_versions)，当客户端不再对某些资源感兴趣的时候需要在`resource_names_unsubscribe`中列出来
+
+
 
 Reference:
 1. https://github.com/envoyproxy/envoy/blob/master/api/XDS_PROTOCOL.md
@@ -802,6 +844,204 @@ Cluster warming，当server启动的时候或者通过CDS初始化Cluster时，C
 
 ClusterManager 管理连接池和load balancing，在多个work线程共享这个对象
 
+## EDS更新机制
+
+增量实现过程分析:
+1. 遍历要更新的hosts，更新locality weight map
+2. 更新all_hosts
+3. 遍历更新的hosts，针对每一个优先级调用对应优先级所对应的hostset的dealUpdate
+
+
+
+重要函数分析:
+
+* `HostSetImpl::updateHosts`
+
+1. 更新过载因子
+2. 更新hosts_、healthy_hosts、degraded_hosts、exluded_hosts、hosts_per_locality_等等
+3. 更新locality weight
+4. rebuildLocalityScheduler 构建健康的healthy_locality_scheduler
+5. rebuildLocalityScheduler 构建degraded的degraded_loality_scheduler
+6. 回调PriorityUpdateCb，对更新后的信息进行统计
+
+* `PrioritySetImpl::updateHosts`
+
+参数解析:
+
+1. `uint32_t priority`                                                  // 要更新的hosts属于的优先级
+2. `UpdateHostsParams&& update_hosts_params`                            // 要更新的hosts的UpdateHostsParams结构(后面会重点解释)
+3. `LocalityWeightsConstSharedPtr locality_weights`                     // 更新后的locality weight结构
+4. `const HostVector& hosts_added`                                      // 要添加的hosts
+5. `const HostVector& hosts_removed`                                    // 要移除的hosts
+6. `absl::optional<uint32_t> overprovisioning_factor = absl::nullopt`   // 是否更新过载因子，不需要的话就
+
+
+```cpp
+void PrioritySetImpl::updateHosts(uint32_t priority, UpdateHostsParams&& update_hosts_params,
+                                  LocalityWeightsConstSharedPtr locality_weights,
+                                  const HostVector& hosts_added, const HostVector& hosts_removed,
+                                  absl::optional<uint32_t> overprovisioning_factor) {
+  // Ensure that we have a HostSet for the given priority.
+  getOrCreateHostSet(priority, overprovisioning_factor);
+  static_cast<HostSetImpl*>(host_sets_[priority].get())
+      ->updateHosts(std::move(update_hosts_params), std::move(locality_weights), hosts_added,
+                    hosts_removed, overprovisioning_factor);
+
+  if (!batch_update_) {
+    runUpdateCallbacks(hosts_added, hosts_removed);
+  }
+}
+```
+
+1. 获取或者创建指定优先级的`HostSetImpl`结构
+2. 调用HostSetImpl的`updateHosts`方法
+3. 是否是batch_update，如果不是就再调用`runUpdateCallbacks`，使用者可以注册进行回调
+
+> 通过BatchUpdateScope进行update的，就是batch_update，是通过一个PriorityStateManagle来进行一次性更新的。
+
+
+* `PrioritySetImpl::BatchUpdateScope::updateHosts`
+
+参数解析:
+
+1. `priority`
+2. `update_hosts_params`
+3. `locality_weights`
+4. `hosts_added`
+5. `hosts_removed`
+6. `overprovisioning_factor`
+
+```cpp
+void PrioritySetImpl::BatchUpdateScope::updateHosts(
+    uint32_t priority, PrioritySet::UpdateHostsParams&& update_hosts_params,
+    LocalityWeightsConstSharedPtr locality_weights, const HostVector& hosts_added,
+    const HostVector& hosts_removed, absl::optional<uint32_t> overprovisioning_factor) {
+  // We assume that each call updates a different priority.
+  ASSERT(priorities_.find(priority) == priorities_.end());
+  priorities_.insert(priority);
+
+  for (const auto& host : hosts_added) {
+    all_hosts_added_.insert(host);
+  }
+
+  for (const auto& host : hosts_removed) {
+    all_hosts_removed_.insert(host);
+  }
+
+  parent_.updateHosts(priority, std::move(update_hosts_params), locality_weights, hosts_added,
+                      hosts_removed, overprovisioning_factor);
+}
+```
+
+本质上和`PrioritySetImpl::updateHosts`没啥区别，参数都是透传的，只是额外保存了优先级、和要添加的hosts、要移除的hosts
+这么做的目的是为了可以计算最终的新增hosts和删除的hosts，然后回调runUpdateCallbacks，因为`PrioritySetImpl::updateHosts`一次
+只能更新一个优先级的hosts，通过`BatchUpdateScope`暴露出一个相同的接口来更新，每次更新记录新增的hosts和移除的hosts。
+
+
+* `EdsClusterImpl::BatchUpdateHelper::batchUpdate`
+
+参数解析:
+
+1. `PrioritySet::HostUpdateCb& host_update_cb` 更新hosts
+
+基本过程分析:
+1. 创建PriorityStateManager
+2. 遍历所有的locality_lb_endpoint
+3. 调用initializePriorityFor进行优先级的初始化
+4. 遍历lb_endpoints，针对每一个主机通过registerHostForPriority进行主机的注册
+5. 获取PriorityStateManager中的priorityState，
+6. 遍历所有的`PriorityState`
+7. 从`PriorityState`中取出每一个优先级内hosts进行`updateHostsPerLocality`
+
+* `PriorityStateManager::updateClusterPrioritySet`
+
+参数解析:
+
+1. `const uint32_t priority`                                                  // 要更新的hosts所在优先级
+2. `HostVectorSharedPtr&& current_hosts`                                      // 当前更新完成后的所有hosts
+3. `const absl::optional<HostVector>& hosts_added`                            // 添加的hosts
+4. `const absl::optional<HostVector>& hosts_removed`                          // 删除的hosts
+5. `const absl::optional<Upstream::Host::HealthFlag> health_checker_flag`     //
+6. `absl::optional<uint32_t> overprovisioning_factor`                         // overprovisioning_factor
+
+基本过程分析:
+
+1. 如果要更新的优先级已经存在，就获取locality weight map，否则就创建一个空的locality weight map
+2. 创建hosts_per_locality结构，key是locality，value是hosts
+3. 遍历所有要更新的hosts
+4. 给每一个hosts设置health flag
+5. 更新hosts_per_locality结构
+6. 遍历hosts_per_locality
+6. 判断是否包含本地locality，有的话就将本地locality的hosts添加到到per_locality vector中
+7. 如果开启了locality weight lb的话就将本地locality weight map放到locality_weights中，记录所有的locality的weight，是一个vector
+8. 创建HostsPerLocalityImpl对象
+9. 调用update_cb_的updateHosts进行更新，否则就直接更新cluster对象的prioritySet().updateHosts方法进行更新
+
+
+* `EdsClusterImpl::updateHostsPerLocality`
+更新指定优先级的hosts，同时也会更新locality weight map、health flag、
+
+参数解析:
+
+1. `const uint32_t priority`                                          // 要更新的hosts的优先级，
+2. `const uint32_t overprovisioning_factor`                           // 要更新的hosts的过载因子
+3. `const HostVector& new_hosts`,                                     // 要更新的hosts
+4. `LocalityWeightsMap& locality_weights_map`                         // 已经存在的机器的locality weight map
+5. `LocalityWeightsMap& new_locality_weights_map`,                    // 要更新的hosts的Locality weight map
+6. `PriorityStateManager& priority_state_manager`,                    // 用来构建更新hosts状态的
+7. `std::unordered_map<std::string, HostSharedPtr>& updated_hosts`    // 用来存放
+
+基本过程分析:
+1. 从当前`priority_set_`中获取指定`priority`的hosts，没有就新创建
+2. 拷贝一份当前`priority`的hosts，传递到`updateDynamicHostList`中进行更新
+3. 如果的确有更新、或者overprovisioningFactor发生了改变、或者locality weight map发生了改变，
+   就调用`priority_state_manager.updateClusterPrioritySet`对通过`updateDynamicHostList`后的hosts进行更新
+   然后更新locality weights map
+
+* `BaseDynamicClusterImpl::updateDynamicHostList`
+对一个新增的的hosts，和已经存在的hosts进行对比，已经存在的根据需要进行原地更新，不存在的就认为是新增的，
+最后得到新增的hosts列表(hosts_added_to_current_priority)，删除的hosts列表(hosts_removed_from_current_priority)，以及最后更新完的hosts列表(current_priority_hosts)。
+
+参数解析:
+
+1. `const HostVector& new_hosts`                                      // 要更新的hosts，是per priority
+2. `HostVector& current_priority_hosts`                               // 当前优先级下存在的hosts
+3. `HostVector& hosts_added_to_current_priority`                      // 更新后，添加到当前优先级的机器
+4. `HostVector& hosts_removed_from_current_priority`                  // 更新后，从当前优先级移除的机器
+5. `HostMap& updated_hosts`                                           //
+6. `const HostMap& all_hosts`                                         // 当前集群存在的所有主机
+
+基本过程分析:
+1. 遍历所有要增加的新hosts，也就是new_hosts
+2. 判断updated_hosts中是否已经存在，避免重复，达到去重的效果
+3. 从all_hosts中查找是否是已经存在的host
+  3.1 如果是，则清楚当前机器的`PENDING_DYNAMIC_REMOVAL`标志 (Why?)
+  3.2 如果存在健康检查机制、并且新添加的hosts和存在的host两者的健康检查的地址不同，就认为跳过host原地更新的过程(Why?)
+    3.2.1 如果跳过hosts原地更新，则设置max_host_weight
+    3.2.2 如果存在健康检查机制就设置HealthFlag为`Host::HealthFlag::FAILED_ACTIVE_HC`
+    3.2.3 如果当前集群还在warm阶段，就设置HealthFlag为`Host::HealthFlag::PENDING_ACTIVE_HC`，这是因为如果设置为`FAILED_ACTIVE_HC`就会认为hosts初始化完成了，wram阶段就结束了
+          正常的warm是包含了健康检查的过程的。
+    3.2.4 将hosts添加到updated_hosts中
+    3.2.5 将hosts添加到final_hosts中
+    3.2.6 将hosts添加到hosts_added_to_current_priority，这是确定要添加的
+  3.3 如果不跳过原地更新，则添加到existing_hosts_for_current_priority中
+  3.4 更新max_host_weight
+  3.5 更新现存的hosts的health flag，判断是否会因为更新health flag导致hosts changed(主要的衡量标准就是更新前后的健康状况是否发生改变了)
+  3.6 判断metadata是否改变，并更新metadata
+  3.7 判断优先级是否改变，并更新优先级，如果优先级改变了，就将hosts添加到hosts_added_to_current_priority中 (why? 为什么会发生呢?)
+  3.8 更新权重
+  3.9 将hosts添加到final_hosts中
+  3.10 将hosts添加到updated_hosts中
+4. 遍历当前优先级下存在的hosts
+5. 如果发现在existing_hosts_for_current_priority中就从existing_hosts_for_current_priority和current_priority_hosts中删除
+6. 如果existing_hosts_for_current_priority不为空就表明hosts changed了 (why?)
+7. 如果drainConnectionsOnHostRemoval标志没有开启，就遍历剩下的current_priority_hosts，找到那些健康的主机，更新max_host_weight，
+   并添加到final_hosts和updated_hosts中，并设置PENDING_DYNAMIC_REMOVAL标志
+8. 设置当前集群最大的host weight
+9. current_priority_hosts剩下的机器被当作remove的hosts，添加到hosts_removed_from_current_priority中
+10. 将finall_host更新为current_priority_hosts
+11. 返回当前hosts是否发生了改变
+
 
 ## Load balancer
 
@@ -813,11 +1053,11 @@ PrioritySetImpl 包含了一个集群下的所有host，然后按照priority维�
 HostSetImpl 按照priority来维护一组host集合，构造函数需要提供priority，然后通过updateHosts来添加host。这组host可能来自于多个Locality
 HostDescriptionImpl 对upstream主机的一个描述接口，比如是否是canary、metadata、cluster、healthChecjer、hostname、address等
 HostImpl 代表一个upstream Host
-HostPerLocalityImpl 按照locality的维度组织host集合，核心数据成员`std::vector<HostVector>`，第一个host集合是local locality。
-PriorityStateManager 管理一个集群的PriorityState，而PriorityState则是按照priority分组维护的一组host和对应的locality weight map
+HostsPerLocalityImpl 按照locality的维度组织host集合，核心数据成员`std::vector<HostVector>`，第一个host集合是local locality。
+PriorityStateManager 管理一个集群的PriorityState，而PriorityState则是按照priority分组维护的一组host和对应的locality weight map，
+PrioritySetImpl包含了多个HostSetImpl，一个HostSetImpl则包含了一个HostsPerLocalityImpl
+LocalityWeightsMap key是Locality，value是这个Locality的权重
 
-
-PrioritySetImpl包含了多个HostSetImpl，一个HostSetImpl则包含了一个HostPerLocalityImpl。
 
 
 ```yaml
@@ -828,7 +1068,10 @@ ClusterLoadAssignment.Policy
   "endpoint_stale_after": "{...}"
 }
 ```
+
 overprovisioning_factor一个过度配置的因子，默认是140，当一个priority或者一个locality中的健康主机百分比乘以这个因子小于100，那么就认为这个priority或者locality是不健康的。
+
+
 
 
 ## Degraded endpoints
@@ -1308,3 +1551,275 @@ void ConnectionManagerImpl::onDrainTimeout() {
 
 
 ## HTTP dynamic forward proxy
+
+
+## Initialization
+
+1. cluster manager包含了多阶段初始化，第一阶段要初始化的是static/DNS clsuter， 然后是预先定义的静态的EDS cluster，
+   如果包含了CDS需要等待CDS收到一个response，或者是失败的响应，最后初始化CDS，接着开始初始化CDS提供的Cluster。
+2. 如果集群提供了健康检查，Envoy还会进行一轮健康检查
+3. 等到cluster manager初始化完毕后，RDS和LDS开始初始化，直到收到响应或者失败，在此之前Envoy是不会接受连接来处理流量的
+4. 如果LDS的响应中潜入了RDS的配置，那么还需要等待RDS收到响应，这个过程被称为listener warming
+5. 上述所有流程完毕后，listener开始接受流量。
+
+
+>  上文中提到的收到响应或者失败，可以通过设置initial_fetch_timeout.来设置响应超时的时候，如果initial_fetch_timeout后还没有收到响应就跳过当前的初始化阶段。
+
+
+## Stats子系统
+
+Stats按照`.`号分割，每一段被称为一个`Symbol`，都会分配一个Symbol，相同的则共用一个`Symbol`
+
+```cpp
+using Symbol = uint32_t;
+```
+
+`SymbolTable`会根据下面两个map做name到Symbol的映射
+
+```cpp
+
+  struct SharedSymbol {
+    SharedSymbol(Symbol symbol) : symbol_(symbol), ref_count_(1) {}
+
+    Symbol symbol_;
+    // 记录Symbol被引用的次数，当引用次数为0的时候才会删除
+    uint32_t ref_count_;
+  };
+
+  // Bitmap implementation.
+  // The encode map stores both the symbol and the ref count of that symbol.
+  // Using absl::string_view lets us only store the complete string once, in the decode map.
+  // 根据stats name查询对应的symbol
+  using EncodeMap = absl::flat_hash_map<absl::string_view, SharedSymbol, StringViewHash>;
+  // 根据symbol查询对应的stats name
+  using DecodeMap = absl::flat_hash_map<Symbol, InlineStringPtr>;
+  EncodeMap encode_map_ GUARDED_BY(lock_);
+  DecodeMap decode_map_ GUARDED_BY(lock_);
+```
+
+把stats中的一段添加到SymbolTable的过程如下:
+
+1. 将stat name 进行Encoding
+2. 创建指定大小的Storage
+3. 将Encoding后的内容存放到Storage中
+
+
+```cpp
+SymbolTable::StoragePtr SymbolTableImpl::encode(absl::string_view name) {
+  Encoding encoding;
+  // 将stat按照.号切割成一个个token，然后放到Encoding中
+  addTokensToEncoding(name, encoding);
+  // 接着创建一个Storage存储stats编码后的内容
+  auto bytes = std::make_unique<Storage>(encoding.bytesRequired());
+  encoding.moveToStorage(bytes.get());
+  return bytes;
+}
+```
+
+一个Storage就是一个`uint_8`的数组，`addTokensToEncoding`会将stats name按照.号切割成一个个token放到Encoding中
+
+```cpp
+  using Storage = uint8_t[];
+  using StoragePtr = std::unique_ptr<Storage>;
+```
+
+
+这个是stats name进行Encoding的过程
+
+1.  `absl::StrSplit(name, '.')`切割stats name
+2.  `symbols.push_back(toSymbol(token))` 每一个stat name通过`toSymbol`转换为Symbol存起来
+3.  `encoding.addSymbol(symbol)` 将所有的Symbol添加到Encoding中进行编码
+
+```cpp
+void SymbolTableImpl::addTokensToEncoding(const absl::string_view name, Encoding& encoding) {
+  if (name.empty()) {
+    return;
+  }
+
+  // We want to hold the lock for the minimum amount of time, so we do the
+  // string-splitting and prepare a temp vector of Symbol first.
+  const std::vector<absl::string_view> tokens = absl::StrSplit(name, '.');
+  std::vector<Symbol> symbols;
+  symbols.reserve(tokens.size());
+
+  // Now take the lock and populate the Symbol objects, which involves bumping
+  // ref-counts in this.
+  {
+    Thread::LockGuard lock(lock_);
+    for (auto& token : tokens) {
+      symbols.push_back(toSymbol(token));
+    }
+  }
+
+  // Now efficiently encode the array of 32-bit symbols into a uint8_t array.
+  for (Symbol symbol : symbols) {
+    encoding.addSymbol(symbol);
+  }
+}
+```
+
+`toSymbol`的实现就依赖上文中提到的`EncodeMap`表，stats的每一段都要去查询这个map，如果已经存在就直接返回对应的Symbol
+否则就创建一个Symbol。Symbol本质上就是一个递增的`uin32_t`类型的整数。
+
+```cpp
+Symbol SymbolTableImpl::toSymbol(absl::string_view sv) {
+  Symbol result;
+  auto encode_find = encode_map_.find(sv);
+  // If the string segment doesn't already exist,
+  if (encode_find == encode_map_.end()) {
+    // We create the actual string, place it in the decode_map_, and then insert
+    // a string_view pointing to it in the encode_map_. This allows us to only
+    // store the string once. We use unique_ptr so copies are not made as
+    // flat_hash_map moves values around.
+    InlineStringPtr str = InlineString::create(sv);
+    auto encode_insert = encode_map_.insert({str->toStringView(), SharedSymbol(next_symbol_)});
+    ASSERT(encode_insert.second);
+    auto decode_insert = decode_map_.insert({next_symbol_, std::move(str)});
+    ASSERT(decode_insert.second);
+
+    result = next_symbol_;
+    newSymbol();
+  } else {
+    // If the insertion didn't take place, return the actual value at that location and up the
+    // refcount at that location
+    result = encode_find->second.symbol_;
+    ++(encode_find->second.ref_count_);
+  }
+  return result;
+}
+```
+
+上面代码中中的`next_symbol_`始终指向下一次分配的时候要使用的`Symbol`，是通过`newSymbol`生成的
+
+```cpp
+// pool_定义
+std::stack<Symbol> pool_
+
+void SymbolTableImpl::newSymbol() EXCLUSIVE_LOCKS_REQUIRED(lock_) {
+  if (pool_.empty()) {
+    next_symbol_ = ++monotonic_counter_;
+  } else {
+    next_symbol_ = pool_.top();
+    pool_.pop();
+  }
+  // This should catch integer overflow for the new symbol.
+  ASSERT(monotonic_counter_ != 0);
+}
+
+void SymbolTableImpl::free(const StatName& stat_name) {
+  // Before taking the lock, decode the array of symbols from the SymbolTable::Storage.
+  const SymbolVec symbols = Encoding::decodeSymbols(stat_name.data(), stat_name.dataSize());
+
+  Thread::LockGuard lock(lock_);
+  for (Symbol symbol : symbols) {
+    auto decode_search = decode_map_.find(symbol);
+    ASSERT(decode_search != decode_map_.end());
+
+    auto encode_search = encode_map_.find(decode_search->second->toStringView());
+    ASSERT(encode_search != encode_map_.end());
+
+    // If that was the last remaining client usage of the symbol, erase the
+    // current mappings and add the now-unused symbol to the reuse pool.
+    //
+    // The "if (--EXPR.ref_count_)" pattern speeds up BM_CreateRace by 20% in
+    // symbol_table_speed_test.cc, relative to breaking out the decrement into a
+    // separate step, likely due to the non-trivial dereferences in EXPR.
+    if (--encode_search->second.ref_count_ == 0) {
+      decode_map_.erase(decode_search);
+      encode_map_.erase(encode_search);
+      // 回收Symbol
+      pool_.push(symbol);
+    }
+  }
+}
+```
+
+当分配的`Symbol`被回收的时候就会通过放到pool_中下次就可以复用了，这个机制类似linux内核中的`inode`分配一样。
+到此为止`Symbol`到stat name的映射关系，以及`Symbol`的分配和释放就讲清楚了，下一步就是将这些`Symbol`进一步`Encoding来`减少存储的大小。
+在`addTokensToEncoding`的实现中的最后一步就是通过`Encoding::addSymbol`方法将一个stats产生的所有Symbol进行Encoding。
+
+```cpp
+static const uint32_t SpilloverMask = 0x80;
+static const uint32_t Low7Bits = 0x7f;
+std::vector<uint8_t> vec_;
+
+void SymbolTableImpl::Encoding::addSymbol(Symbol symbol) {
+  // UTF-8-like encoding where a value 127 or less gets written as a single
+  // byte. For higher values we write the low-order 7 bits with a 1 in
+  // the high-order bit. Then we right-shift 7 bits and keep adding more bytes
+  // until we have consumed all the non-zero bits in symbol.
+  //
+  // When decoding, we stop consuming uint8_t when we see a uint8_t with
+  // high-order bit 0.
+  do {
+    if (symbol < (1 << 7)) {
+      vec_.push_back(symbol); // symbols <= 127 get encoded in one byte.
+    } else {
+      vec_.push_back((symbol & Low7Bits) | SpilloverMask); // symbols >= 128 need spillover bytes.
+    }
+    symbol >>= 7;
+  } while (symbol != 0);
+}
+```
+
+整个编码的过程类似于`UTF-8`编码，会根据`Symbol`本身的值大小来决定是使用多少个字节来存储，如果是小于128的话，那么就按照一个字节来存储
+，如果是大于128那么就会进行切割。首先通过和`Low7Bits`相与拿到低7位，然后和`SpilloverMask`相或将最高位设置为1。这里有个疑问为什么是小于128就用
+单字节存储呢?这里为什么不是256呢?，`vec_`的类型其实是`uint8_t`的，完全可以用来存储256。但是这里只用到了低7位，最高的那一位是用来表示这个`Symbol`是否
+是多个字节组成还是一个字节组成的。如果是0就表示这个Symbo是一个单字节的。所以当包含多个字节的时候，需要和`SpilloverMask`相或将最高位设置为1来表示是多字节的`Symbol`。
+
+
+最后一个stat name被编程成了一个`std::vector<uint8_t>`，然后通过`Encoding::moveToStorage`方法将整个`std::vector<uint8_t>`存放到`Storage`中
+
+```cpp
+uint64_t SymbolTableImpl::Encoding::moveToStorage(SymbolTable::Storage symbol_array) {
+  const uint64_t sz = dataBytesRequired();
+  symbol_array = writeLengthReturningNext(sz, symbol_array);
+  if (sz != 0) {
+    memcpy(symbol_array, vec_.data(), sz * sizeof(uint8_t));
+  }
+  vec_.clear(); // Logically transfer ownership, enabling empty assert on destruct.
+  return sz + StatNameSizeEncodingBytes;
+}
+```
+
+到此为止一个`Stat name`被编码成了一个`Storage`，这个`Storage`可以被用来构造成`StatName`结构，但是不拥有Storage这是对其引用，真正拥有`Storage`的是`StatNameStorage`
+而`StatLNameList`则是包含了一组顺序的`Stat Name`的容器。
+
+
+
+最后来看一个，如果将一个`Symbol`数组转换为对应的`stat name`。
+
+```cpp
+std::string SymbolTableImpl::toString(const StatName& stat_name) const {
+  return decodeSymbolVec(Encoding::decodeSymbols(stat_name.data(), stat_name.dataSize()));
+}
+
+SymbolVec SymbolTableImpl::Encoding::decodeSymbols(const SymbolTable::Storage array,
+                                                   uint64_t size) {
+  SymbolVec symbol_vec;
+  Symbol symbol = 0;
+  for (uint32_t shift = 0; size > 0; --size, ++array) {
+    uint32_t uc = static_cast<uint32_t>(*array);
+
+    // Inverse addSymbol encoding, walking down the bytes, shifting them into
+    // symbol, until a byte with a zero high order bit indicates this symbol is
+    // complete and we can move to the next one.
+    symbol |= (uc & Low7Bits) << shift;
+    if ((uc & SpilloverMask) == 0) {
+      symbol_vec.push_back(symbol);
+      shift = 0;
+      symbol = 0;
+    } else {
+      shift += 7;
+    }
+  }
+  return symbol_vec;
+}
+```
+
+`decodeSymbols`会将`Storage`转换成一个`SymbolVec`，因为一个`Storage`可以包含多个`Symbol`。转换的过程如下:
+
+1. 每次从Storage中那一个`uint8_t`，然后转换为`uint32_t`，因为Symbol的类型就是`uint32_t`
+2. 接着通过和`Low7Bits`相或拿到低7位的值
+3. 判断`SpilloverMask`位是否是0，如果是0那就是一个完整的`Symbol`直接放到SymbolVec即可
+4. 如果是1表面，Symbol还要继续组装，再次读取一个uint8_t，然后取低7位，这个时候，需要向左移动7位，因为Symbol的每一个部分都是7位组成，依次排放的。

@@ -417,3 +417,24 @@ bridge := func(
 * Mark Termination - STW
 
 
+
+## 如何保证文件锁不会释放
+
+
+```golang
+
+go 里创建一个 file 时，会默认设置一个 Finalizer，当这个 File 回收时触发，关闭文件 fd，防止 fd 泄露。
+
+在进程不需要文件锁之前，必须要保证文件锁的 file 对象一直是 reachable。可以使用 runtime.KeepAlive。如：
+
+func main() {
+    r := runner{}
+    if err := r.lock(); err != nil {
+        fmt.Printf("%s\n", err)
+        return
+    }
+    defer runtime.KeepAlive(r.f)
+
+    r.run()
+}
+```

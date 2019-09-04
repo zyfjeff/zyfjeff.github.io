@@ -80,7 +80,6 @@ while (true) {
 就会导致这个机器被再次选中。
 
 
-
 Reference:
 
 [weighted](https://github.com/smallnest/weighted)

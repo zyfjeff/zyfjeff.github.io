@@ -1,4 +1,5 @@
 ## Ingress - they're coming
+
 1. Packets arrive at the NIC
 2. NIC will verify MAC (if not on promiscuous mode) and FCS(FCS：Frame Check Sequence（帧校验序列) and decide to drop or to continue
 3. NIC will [DMA packets at RAM](https://en.wikipedia.org/wiki/Direct_memory_access), in a region previously prepared (mapped) by the driver
@@ -302,3 +303,10 @@ sudo sysctl -w net.ipv4.ip_early_demux=0
 
 Reference: https://blog.packagecloud.io/eng/2016/06/22/monitoring-tuning-linux-networking-stack-receiving-data/#special-thanks
 Reference: https://vincent.bernat.ch/en/blog/2014-tcp-time-wait-state-linux
+
+
+
+
+## TCP connection repair
+
+https://lwn.net/Articles/495304/

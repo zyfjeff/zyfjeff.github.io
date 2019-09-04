@@ -82,6 +82,39 @@ refFold<int&>(c);
 refFold<int&>(0); # compile error
 ```
 
+
+## function And Move Lambda
+
+当一个lambda函数使用move捕获了一个只能move的变量，那么这个lambda将无法复制和移动给一个function，需要使用模版来解决
+
+```c++
+class HasCallback
+{
+  public:
+    // 改成void setCallback(T&& f)即可解决
+
+    void setCallback(std::function<void(void)>&& f)
+    {
+      callback = move(f);
+    }
+
+    std::function<void(void)> callback;
+};
+
+int main()
+{
+  auto uniq = make_unique<std::string>("Blah blah blah");
+  HasCallback hc;
+  hc.setCallback(
+      [uniq = move(uniq)](void)
+      {
+        std::cout << *uniq << std::endl;
+      });
+
+  hc.callback();
+}
+```
+
 ## 强类型
 
 参考文章:
@@ -138,6 +171,7 @@ int main() {
 ```
 
 ## 可变参数模版
+
 Start with the general (empty) definition, which also serves as the base-case for recrusion termination in the later specialisation:
 
 ```cpp
@@ -561,6 +595,40 @@ class ProdB : public B {
   virtual std::unique_ptr<A::AInterface> Create() override {
     return A::Create();
   }
+};
+```
+
+## RAII List
+
+```cpp
+// RAII helper class to add an element to an std::list on construction and erase
+// it on destruction, unless the cancel method has been called.
+template <class T> class RaiiListElement {
+public:
+  RaiiListElement(std::list<T>& container, T element) : container_(container), cancelled_(false) {
+    it_ = container.emplace(container.begin(), element);
+  }
+  virtual ~RaiiListElement() {
+    if (!cancelled_) {
+      erase();
+    }
+  }
+
+  // Cancel deletion of the element on destruction. This should be called if the iterator has
+  // been invalidated, eg. if the list has been cleared or the element removed some other way.
+  void cancel() { cancelled_ = true; }
+
+  // Delete the element now, instead of at destruction.
+  void erase() {
+    ASSERT(!cancelled_);
+    container_.erase(it_);
+    cancelled_ = true;
+  }
+
+private:
+  std::list<T>& container_;
+  typename std::list<T>::iterator it_;
+  bool cancelled_;
 };
 ```
 

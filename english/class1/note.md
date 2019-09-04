@@ -1,6 +1,20 @@
 
 # 语法
 
+* 名词词组
+限定符(如果名词是复数、或者不可数就采用零冠词) + (副词来修饰形容词 形容词(可有可无)) + 名词(每一个部分都有可能或缺)
+英语中凡是用到名词一定是以名词词组的形式出现
+
+可数名词的两大类:
+
+1. 具有固定形状的物体
+2. 度量衡单位
+
+
+* 形容词
+
+
+
 ## 冠词
 
 待在名词上的帽子，没有特殊情况不能摘帽子
@@ -279,7 +293,7 @@ This is Miss Sophie Dupont?
 
 特殊疑问句 不等于 特殊疑问词 + 一般疑问句(动词 + 主语) ?
 Who is climbing the tree ?
-What is in it ?
+What is in it ? 里面是什么东西
 What is on ?
 Who served you ?
 I don't know what you are talking about?
@@ -653,8 +667,444 @@ Lucy is with her boyfriend. They are driving. Lucy is looking at a beautiful bir
 The bird is flying in the sky. Some people are walking over the brideg. They are busy
 
 
-
-
-
 It's vs its的区别
 
+## 41 Penny's bag
+a loaf of
+a bar of
+a pound of
+tobacco
+cheese
+it's certaintly not for me! 当然不会是给你的
+What's in it? 里面是什么东西
+
+
+### 43 Hurry up
+electric up 通电
+teapot 茶壶
+pot 锅、罐，容器
+flow pot 花盆
+hot pot火锅
+boil 沸腾开(不及物动词)
+The kettle is boiling (水壶开了，现在进行时)
+boil 煮(及物东西，可以接双宾语)
+Please boil me an egg
+Please boil an egg for me
+oil 油(汽油、食用油)
+pil painting 油画
+housewife -> housewives(复数)
+
+some(用在肯定句) vs any(否定句) + 可数名次复数或不可数名次，不能接可数名次的单数形式
+any 若干、任何
+Is there any(任何) beer in the bolle? -> No, there isn't any(代词)
+
+There are some books on the table?
+Are there any books on the table?
+There aren't any book on the table?
+
+如果是一个表示请求、建议、反问的疑问句，或希望得到对方肯定答案才提出的疑问句可以用some
+Shall I have some coffee?
+What about some tea?
+Why don't we have some beer?
+Are these some students in the classroom?
+
+在一个表示部分否定的否定句中可以用some
+Some of them are not Chinese
+
+over there 在那边
+hurry up  赶快 => quickly
+get up 起床
+eat up 吃光、吃完
+speed up 快一点
+speak up 大点声(speak loudly)
+shut up 闭嘴
+wait up 等一等
+
+slow down 慢点
+calm down 冷静
+sit down 坐下
+put that down 放下
+
+calm:
+  adj. 静的，平静的；沉着的
+  vt. 使平静；使镇定
+  vi. 平静下来；镇定下来
+  n. 风平浪静
+
+
+in the front of vs in the front of
+in front of 在...之前(两个相对独立的个体之间的关系)，in the front of(一个物体的前端)
+
+情态动词: can(能力，允许、请求，要求)、must、必须放在动词的前面、此时改动词必须采用动词原型
+He must go no
+We must study English
+She must be in the office
+
+转变为一般疑问句，需要将情态动词放在居首或者主语前面
+Must he go now?
+转变为否定句，将must变成needn't、mustn't
+转变为特殊疑问句，针对主语提问，就是选好疑问词，剩下不变，否则就需要将情态动词放在主语前面，然后加疑问词
+What must we do?
+
+She must be in the office
+1. Must she be in the office?
+2. She mustn't be in the office
+3. Where must she be?
+
+
+英语中习惯以第一人称为主体，中文则不是
+
+Can you bring me some water, please? -> Can I have some water, please?
+
+Can I have your name?
+Can I help you?
+Can I have your e-mail address?
+Can I use your bike?
+Can I have your order?
+Can I speak to Tom please?
+Can I have a look at your cell phone?
+
+
+Can you speak English(你会英语吗，侧重询问对方有没有这个能力，具有挑战的意味)? Do you speak English? 更礼貌
+
+
+## 45 The boss's letter
+
+wait a minute 等一会
+ask the way 问路
+his handwriteing is very nice 他的字写的很好
+lift 举起、拿起、电梯(直梯)
+Can you lift this heavy case?
+a minute 一会
+Can you come here a minute please?
+next door 在隔壁
+next-door 隔壁的 adj
+She is next door 她在隔壁
+There is a shcool next door to the park
+和什么相邻 next door to ...
+The next door girl is very beautiful 放在名词的前面做修饰
+
+* 情态动词 表示情感和态度的词(can、must、may....)
+  用法: +动词，且原型
+  没有单复数和人称之分
+  You must go out
+  Can you please stand up?
+  疑问句:
+    can 直接提前变成疑问句
+    Tom can swim well -> Can tom swim well
+  否定句:
+    can->can't、cannot
+    must->mustn't(禁止，语气极端强)
+    may->may not
+    don't need 没必要
+* 连系动词
+* 实义动词
+* 助动词
+
+## 47 A cup of coffee
+
+dislike 不喜欢
+I dislike coffee very much
+
+like 喜欢(v)、像(prep)
+You look like your father
+Like father, like son 有其父必有其子
+Love me, love my dog 爱屋及屋
+
+butter 黄油
+butterfly 蝴蝶
+bread and buttle 饭碗、生计
+Teaching is my bread and buttle 教书是我的饭碗
+pure 纯净的
+honey 蜂蜜
+ripe 成熟的
+choice 上等的、精选的
+
+Do you like books? 并不是Do you like book?
+
+* 肯定句
+* 否定句
+* 一般疑问句
+* 特殊疑问句
+
+
+肯定句 -> 一般疑问句 (需要将动词(be动词、情态动词，如果同时出现，左侧动词提前)放在主语之前)
+He must be in the office -> Must he be in the office
+既没有be动词、也没有情态动词、也没有助动词的时候需要用do(助动词)来辅助完成转换为疑问句
+I like coffee -> Do you like coffee?
+I must do my homework 这里的do是做的意义，不是助动词
+
+肯定句 -> 否定句 (否定词not、有be动词时放在其后，有情态动词放在其后，助动词放在其后，同时出现，放在最左侧动词后)
+He is a teacher -> He isn't a teacher
+He must go now -> He nneedn't go now
+He must be in the office ->  He needn't be in the office
+
+没有be、情态、助动词的时候，需要引入do，然后not放在后面
+I like coffee -> I don't like coffee
+
+肯定句 -> 特殊疑问句 (不针对主语提问的时候，需要把动词提到主语之前，含有be动词就提前、情态动词提前、助动词提前，都没有的情况使用do放在主语前)
+He is a teacher -> who is he?
+He must go now -> When must he go?
+I can swim -> What can you do?
+
+
+## 49 At the butcher's
+
+mutton 羊肉
+teak 牛排 a piece of steak
+pork
+tell sb.sth 告诉某人某事
+I don't know either
+
+either vs too 前者用于否定句、后者用在肯定句
+
+at the butcher's
+at the doctor's
+at the hairdresser's
+
+Are you ....? vs Do you ...?
+
+Are you + 非动词? Is she/he/it....?
+Do you + 动词? Does she/he/it....?
+
+Are you busy?
+Are you a techaer?
+Are you at home?
+
+Do you sleep well?
+Do you make the bed?
+Do you have breakfast?
+
+三单: 第三人称单数(she、he、it，人的名字、人的称呼、单个物体、不可数名词)
+
+礼貌回复:
+
+1. Yes please
+2. No, thank you
+
+一般现在时:
+1. 何时用
+
+  * 经常的状态
+  * 习惯的动作
+  * 真理(客观事实)
+
+2. 结构
+
+  经常的状态 主语 + is/am/are
+  习惯的动作 主语 + 动词
+  真理 主语 + is/am/are or 主语 + 动词
+
+  They are very bad
+  They often cheat in the exams
+  They earth is round
+  The sun rises in the east
+
+  后面接的动词:
+    * 主语为非三单 + 动词原型
+    * 主语为三单 + 动词s\es
+
+变疑问句:
+They drink beer every night
+Do they drink beer every night?
+
+He loves his girlfriend very much
+Does he love his girlfriend very much?
+
+
+## 51 A pleasant climate
+
+名词 + y => 形容词
+rain -> rainy
+cloud -> cloudy
+snow -> snowy
+luck -> lucky
+sun -> sunny
+
+What is the climate like?
+What is the weather like?
+What is your new boss like?
+
+How are you?
+How is the climate?
+Hos is the wealther?
+How is your new job?
+How is your English?
+
+
+
+in(在...里面，在一个较大的地方) vs on(在...上面，在...旁边，靠近) vs at(用于较小且具体的地点或门牌号前)
+
+和时间搭配
+1. in 通常和大段时间， in Jan、in Feb、in Mar、in spring、in summer、in autumn、in the monring(固定搭配)
+2. on 和某一天搭配， on Monday
+3. 与分钟和小时搭配 at noon(固定搭配) at night(固定搭配)
+
+this开头的时间不使用介词 this moring、this week
+last开头的时间不使用介词 last night、last week、last month
+next开头的时间不使用介词 next time、next week
+
+副词: 在句子中专门修饰、忽悠形容词、动词以及其他副词(形容词、动词后)
+
+I am very tired (修饰形容词)
+I like English best (修饰动词)
+I work very hard (修饰副词)
+
+Beijing is my favorite city -> I like Beijing best
+Spring is my favorite city -> He likes spring best
+
+> 修饰动词的词是副词
+
+频度副词  主要是用来修饰动词的，放在动词前、情态动词和be动词后、sometimes例外都可以，还可以放在居首表强调
+always (100%)
+usually (90%)
+often (60%)
+sometimes (30%)
+seldom (5%)
+never (0%)
+
+
+
+## 53 An interesting climate
+
+mild food 清淡的食物
+East,west,home is beast 金窝银窝不如自己的草窝
+wet 潮湿
+water - wash - wine - wave - well - weep - woman
+
+The neights are short, and days are long
+
+## 55 The Sawyer family
+supper 晚餐
+dinner 正餐
+Good evening 晚上好
+Good night 晚安
+eventing dress 晚礼服
+
+arrive in Beijing(大地点)
+arrive at school (小地点)
+arrive at the airport (小地点)
+arrive at bus station(小地点)
+
+
+可数名词复数 vs 动词三单
+
+1. +s
+books teachers dogs vs walks answers begs
+
+2. +es
+boes watches dishes vs passes washes teaches
+
+3. 辅音+y，去y变i + es
+city cities、lady、ladies vs study、studies、try tryes
+
+the 姓名s 表示一家人，特指夫妇两
+
+I am going to work vs I go to work
+I usually finish my work at 5
+Let's go shopping after work
+
+
+## 57 An unusual day
+
+A: 一般现在时 vs B: 现在进行时
+
+1. 使用情况不同
+  * 一般现在时: 习惯的状态、经常的动作、真理
+  * 现在进行时: 此时此刻正在做，一段时间内一直
+
+2. 结构不同
+  * 一般现在: 主语 + is\am\are, 主语 + v.
+  * 现在进行时: 主语 + is\am\are + doing
+
+3. 时间状语不同
+  * 一般现在: every...、always, usually， often，sometimes...
+  * 现在进行: now、at the monment
+
+
+I usually have launch at 12:00.
+But I am having lauch now at 2:00
+
+
+## 59 Is that all?
+
+Is that all? 就这些吗?
+
+1. 基数词
+
+teen 十几岁、青少年
+thirteen、fourteen、fifteen、sixteen、seventeen、eighteen、nighteen
+twenty twenty-one
+thirty thirty-one
+forty forty-one
+fifty fifty-one
+seventy seventy-one
+eighty eighty-one
+ninety
+hundred one hundred two hundred  hundred and + 十/个(999 -> nine hundred and ninety-nine)
+thousand one thousand two thousand thouand and + 百/十／个
+ten thousand 一万
+one million 一百万
+millionaire 百万富翁
+
+2. 序数词
+first、second、third、fourth、fifth、sixth、seventh、eighth、ninth、tenth、eleventh、twelfth
+thirteenth、fourteenth、fifteenth、sizteenth、....
+twentieth 第二十
+
+
+## 67  The weekend
+
+主语 + 动词(时态) + 其他成份
+
+主语 + am/is/are + 动词ing 现在进行时
+主语 + am/is/are + going to + 动词原型 一般将来时
+主语 + was/was/were + 动词过去式 一般过去时
+
+动词的过去式形式，分为两大类：
+
+* 规则动词
+  1. 动词 + ed
+    walk -> walked
+    stay -> stayed
+    rain -> rained
+
+  2. 不发音的动词e结尾 + d
+    arrive -> arrived
+    move -> moved
+    smoke -> smoked
+
+  3. 辅音结尾 + i + ed
+    study -> studied
+    try -> tryied
+    cry ->cryied
+
+  4. 辅音 + 1元音(重度音节) + 辅音() + ed 双写辅音
+    open(重音在o，不在e) -> opened
+    stop -> stopped
+    slip -> slipped
+    regret -> regretted
+
+* 不规则动词
+
+go -> went
+say -> siad
+read -> read
+put -> put
+make -> made
+see -> saw
+
+过去式的发音问题:
+
+1. 清辅音(声带不震动) + ed /t/
+  walk -> walked
+  watch -> watched
+  help -> helped
+
+2. 浊辅音 & 元音 + ed /d/
+  open -> opened
+  play -> played
+
+3. /t/ & /d/ + ed /id/
+  want -> wanted
+  need -> needed

@@ -89,7 +89,7 @@ b.trace_fields() //将输出信息按照字段分割的形式输出  (task, pid,
 19. `attach_uprobe` attach到一个uprobe
 20. `PT_REGS_PARM1` 获取到要trace的函数中的第一个参数
 21. `bpf_usdt_readarg(6, ctx, &addr)` 读取USDT probe的第六个参数到addr变量中
-22. `bpf_probe_read(&path, sizeof(path), (void *)addr)` 将addr指向path变量
+22. `bpf_probe_read(&path, sizeof(path), (void *)addr)` 将addr中的内容读取出来赋值给path变量，可以理解是安全版本的memcpy
 23. `USDT(pid=int(pid))` 对指定PID开启USDT tracing功能
 24. `enable_probe(probe="http__server__request", fn_name="do_trace")` attach do_trace函数到Node.js的`http__server__request` USDT probe
 25. `BPF(text=bpf_text, usdt_contexts=[u])` 将USDT对象u传递给BPF对象
@@ -140,4 +140,36 @@ while 1:
         b.perf_buffer_poll()
     except KeyboardInterrupt:
         exit()
+```
+
+
+## tracepoint
+
+```python
+from __future__ import print_function
+from bcc import BPF
+from bcc.utils import printb
+
+# load BPF program
+b = BPF(text="""
+// module名和event名
+TRACEPOINT_PROBE(random, urandom_read) {
+    // args is from /sys/kernel/debug/tracing/events/random/urandom_read/format
+    bpf_trace_printk("%d\\n", args->got_bits);
+    return 0;
+}
+""")
+
+# header
+print("%-18s %-16s %-6s %s" % ("TIME(s)", "COMM", "PID", "GOTBITS"))
+
+# format output
+while 1:
+    try:
+        (task, pid, cpu, flags, ts, msg) = b.trace_fields()
+    except ValueError:
+        continue
+    except KeyboardInterrupt:
+        exit()
+    printb(b"%-18.9f %-16s %-6d %s" % (ts, task, pid, msg))
 ```
