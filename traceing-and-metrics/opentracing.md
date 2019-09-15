@@ -1,4 +1,5 @@
 ## Opentracing的接口规范
+
 1. `Start a new Span` 需要有一个创建Span的接口
 2. `Inject a SpanContext` 需要将SpanContext注入到SpanContext对象中，用于跨进程传输
 3. `Extract a SpanContext`, 通过Carrier跨进程获取SpanContext信息

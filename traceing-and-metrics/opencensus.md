@@ -1,15 +1,16 @@
 ## stats领域中的基础概念
+
 时间序列-> 就是一系列以时间为索引的数据点
 每一个时间序列通过其metric和一些了的key-value对(也称为labels)来唯一标识
 
 1. Measure 就是代表一种类型的记录，比如请求的延迟等，在某些系统中也称为Metrics
 2. ViewDescriptor view的元数据信息，是一个值类型，描述了这个view对应的Measure信息，Aggregation信息、columes信息等
-3. View 
-4. ViewData 
+3. View
+4. ViewData
 5. Record 用于记录一系列的Measurement
 6. MeasureRegistry 用于将一个记录的所有的Measuredescriptor注册进去，并提供了一系列的函数用于查询Measure对应的MeasureDescriptor
 7. Measurement 是一个pair，包含了Measure和其对应的值
-8. StatsManager 
+8. StatsManager
 9. MeasureDescriptor Measure的元数据信息，表示这个Measure的类型、名称、单位、描述信息等
 10. AggregationWindow 聚合的周期，目前支持Cumulative 和 Interval两种方式
 11. Aggregation 聚合方式，目前支持Count、Sum、Distribution等类型
@@ -29,12 +30,12 @@ MeasureRegistry::RegisterInt
             -> 将MeasureDescriptorji进行注册
         -> Measure 通过MeasureRegistryimpl::Registerimpl的返回址构建Measure
         -> Statsmanager::AddMeasure 将Measure添加到StatsManager中，StatsManager是一个单例
-            -> MeasureInfomation构造 
+            -> MeasureInfomation构造
             -> 注册MeasureInfomation 和MeasureRegistryimpl中注册的Measure基本是一一对应的
 
 
 Exporter注册的过程:
-StatsExporter::RegisterPushHandler() 
+StatsExporter::RegisterPushHandler()
     > StatsExporter::RegisterPushHandler 需要注册一个实现了opencensus::stats::StatsExporter::Handler的类实例
         -> StatsExporterImpl::RegisterPushHandler StatsExporterImpl是一个单例，
             -> 注册到内部的handler集合中

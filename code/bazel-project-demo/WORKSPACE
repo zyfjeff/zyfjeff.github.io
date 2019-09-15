@@ -50,5 +50,18 @@ http_archive(
   sha256 = "0de43b6eaddd356f1d6cd164f73f37faf2f6c96fd684e1f7ea543ce49c1d144e",
 )
 
+http_archive(
+    name = "com_github_grpc_grpc",
+    urls = [
+        "https://github.com/grpc/grpc/archive/304f0ee9ba4bc48dd897047c04b8b76aab1fb65d.tar.gz",
+    ],
+    strip_prefix = "grpc-304f0ee9ba4bc48dd897047c04b8b76aab1fb65d",
+)
+
+load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
+
+grpc_deps()
+
 load("//bazel:third_party_repositories.bzl", "include_third_party_repositories")
 include_third_party_repositories()
+
