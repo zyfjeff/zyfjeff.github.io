@@ -29,6 +29,7 @@ Options:
 13‑14	Descriptor Privilege Level (DPL)	The minimal privilege level required for calling this handler.
 15	Present
 ```
+
 每一种异常都有一个预先定义的IDT索引，例如invalid opcode exception在table中就有一个索引是6，page faule异常的索引是14，当一个异常发生，CPU大致会做如下事情:
 1. 将一些寄存器保存到堆栈上，包括指令指针，还有一个寄存器
 2. 从IDT中读取对应的条目

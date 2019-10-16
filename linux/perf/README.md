@@ -72,6 +72,8 @@ echo 3 > /proc/sys/vm/drop_caches
 * bcc的cachestat.py、cachetop.py、memleak.py、
 
 
+* strace -p xxx -c 统计系统调用的次数和耗时
+
 ## 场景case
 
 1. 大量进程频繁创建和退出导致的CPU使用率上升，但是ps、top、pidstat无法查看到这一现象

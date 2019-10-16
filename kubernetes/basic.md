@@ -1,4 +1,5 @@
 ## Kubeadm
+
 1. 安装docker, systemctl starte docker.service，设置HTTPS_PROXY、NO_PROXY
 2. 安装kubernetes yum源
 

@@ -456,7 +456,7 @@ Math make mem subtle
 1. some\any + 复数名词或不可数名词时时一些的意思，some用在肯定句中，any用在否定、疑问句中。
 
 Is there a + 可数名词
-Is there ant + 不可数名词
+Is there any + 不可数名词
 
 2. 但是在表请求、建议的疑问句中用some
 3. any + 单数名词， some翻译为某一，any翻译为任一
@@ -1052,6 +1052,131 @@ first、second、third、fourth、fifth、sixth、seventh、eighth、ninth、ten
 thirteenth、fourteenth、fifteenth、sizteenth、....
 twentieth 第二十
 
+## 61 A bad cold
+
+* tongue
+
+
+感官动词 -> 半系动词(有三单复数、过去式...和实义动词有相同的性质，用形容词修饰，实义动词用副词修饰)
+
+1. taste
+2. feel
+3. sound
+4. smell
+5. look
+6. listen
+
+in bed 生病卧床
+in the bed 躺在床上
+
+打电话给某人:
+
+1. call sb
+2. phonse sb
+3. give sb a call
+4. give sb a phone
+
+headcache 头疼
+earache 耳朵疼
+backache 背疼
+
+flu 流行性感冒
+temperature 温度
+medicine 药
+measles 麻疹
+
+## 63 Thank you, doctor
+
+* certainly 当然
+* remain 继续、保持
+* yet 还、仍
+* come upstairs 上楼 or  go upstairs
+* rich 油腻的
+* have(has)
+  1. 拥有
+  2. 吃喝
+  3. 患、生、得、有
+  4. have + a + 名(动作，行为) 从事进行... (have a rest、have a talk)
+  5. 经历 have a party、have a class
+
+情be后定词前、句首句尾表强调
+
+
+## 64 Don't ...! You mustn't ...!
+
+* match 火柴
+* so 如此地
+* lean out of 身体探出
+* lean 倾斜、依靠、倾向
+* noise 喧闹声
+* play with matches 玩火柴
+* make a noise 发出响声
+
+动词的形式:
+
+1. 动词原型 walk
+2. 第三人称单数 walks
+3. 现在分词 walking
+
+* 祈使句中的动词要用原型 Don't drop it
+* be going to + 动词原型 一般将来时
+* 情态动词后接动词原型
+
+## 65 Not a baby
+
+* 反身代词的目的是强调主语，代词是用来代替主语的词
+* He himself sent me a gift(强调是他亲自送给我的礼物)
+* 介词 + 反身代词
+* the key to the front door 前门钥匙
+* enjoy后面往往接一个反身代词
+* by oneself 独自
+* learn sth by himself 自学
+* help oneself 随意
+* enjoy oneself 玩的开心
+* must/can + be + 非动词
+  1. He can be here for a long time
+  2. They must be here at 9:00
+
+反身代词:
+
+单数: myself、yourself、(himself、herself、itself)
+复数: ourselves、yourselves、themselves
+
+## 66 What's the time?
+
+* 7:30
+
+half past seven
+half to eight
+
+* 4:20
+
+four twenty
+twenty past four
+
+* 10:15
+
+ten fifteen 10:15
+fifteen past ten
+a quarter past ten
+
+* 2:45
+
+three quarter past two
+
+* 2:55
+
+two fifty-five
+five to three
+fifty-five past two
+
+* 7:30
+
+seven thirty
+thirty past seven
+half past seven
+half to eight
+two quarters past seven
 
 ## 67  The weekend
 
@@ -1064,22 +1189,22 @@ twentieth 第二十
 动词的过去式形式，分为两大类：
 
 * 规则动词
-  1. 动词 + ed
+  1. 动词 => ed
     walk -> walked
     stay -> stayed
     rain -> rained
 
-  2. 不发音的动词e结尾 + d
+  2. 不发音的动词e结尾 => d
     arrive -> arrived
     move -> moved
     smoke -> smoked
 
-  3. 辅音结尾 + i + ed
+  3. 辅音结尾 => i + ed
     study -> studied
     try -> tryied
     cry ->cryied
 
-  4. 辅音 + 1元音(重度音节) + 辅音() + ed 双写辅音
+  4. 辅音 + 1元音(重度音节) + 辅音() => 双写辅音 + ed
     open(重音在o，不在e) -> opened
     stop -> stopped
     slip -> slipped
@@ -1108,3 +1233,232 @@ see -> saw
 3. /t/ & /d/ + ed /id/
   want -> wanted
   need -> needed
+
+* aren't you lucky! => 否定疑问句形式的感叹句，为的是加强语气，表示强有力的肯定 你们真幸运
+
+* absent from 缺席
+
+absent from school
+absent from work
+
+* How are you all keeping? => How are you?
+
+* for the weekend 是指周末这几天的时间、at the weekend是强调时间的某一点。
+
+
+## 69 The car race
+
+* hundreds of ....数以百计的....
+* the year of the snake
+* It is the year of the snake and it was the year of the dragon
+* on the way to school(名词需要介词来连接)
+* on the way home(副词，直接修饰)
+* by the way
+* No way
+* stationer 文具商
+* in the race 参加比赛
+* at the race 观看比赛
+
+
+数字在后面
+
+* Line 10
+* Room 61
+* Platform 19
+
+five other(通常直接接名词) cars 其他五辆车
+
+
+My wife and I(自己放在后面) were at the race
+
+
+* at vs on vs in
+
+at + 点
+on + 天
+in + 月、季、年
+
+
+There be 句型的过去式
+
+There be + (was, were) + 地点
+
+疑问句将 was/were提到最前面
+
+分类:
+  1. There was + 单数名词
+  2. There were + 复数名词
+
+
+* 有
+1. 拥有 have
+2. 存在 there be
+
+## 71 He's awful
+
+* awful 让人讨厌的、坏的
+* once、twice、three times (一次、二次、三次....)
+
+says(三单) 发音是 /sez/
+
+very nice to see you again
+
+say 强调说话的内容
+speak 突出说话的方式或动作本身  speak loudly、speak slowly、speak English
+
+she said sorry to me
+
+
+The day before yeasterday 前天
+The night after next
+
+at six o'clock yesterday eventing (小时间在前)
+
+
+He was in the office
+
+1. Was he in the office?  一般疑问句，be动词提前即可
+2. He wasn't in the office 否定词
+3. Where was he? 不是针对主语提问的，动词提前 特殊疑问句
+4. Who was in the office 针对主语提问，动词不提前 特殊疑问句
+
+
+There was a car race in our town in 1998
+
+1. Was there a car race in our town in 1998
+2. There wasn't a car race in our town in 1998
+3. What was there in our town in 1998?
+
+
+He went to school yesterday
+
+1. Did he go to school yesterday (Do会将原先的动词语法成分吸收过来)
+2. He did't go to shcool yesterday
+3. When did he go to shcool?
+4. Where did he go yesterday?
+5. What did he do yesterday?
+6. Who went to school yesterday?
+
+He likes coffee? -> Does he like coffee?
+
+情态动词没有数和人称的变化
+
+## 73 The way to King Street
+
+* suddently
+* bus stop
+* a green hand 新手
+* hurriedly 匆忙地
+* thirstily 口渴地
+* greet 问候，打招呼  greet to sb 向某人打招呼
+
+smile(微笑) vs laugh(大笑)
+
+He said and smiled
+She is telling me a story with a smile
+They are talking and laughing
+
+speak vs say
+
+* say 强调说话的内容
+* speak 突出说话的方式或动作本身
+
+过去式
+
+* go to -> went to
+* lose her way -> lost her way
+* see -> saw
+* say -> said
+* smile -> smiled
+* do not -> did not
+* speak -> spoke
+* is -> was
+* put -> put
+* take -> took
+* open -> opened
+* find -> found
+* read -> read
+
+she does not know ... very well
+
+He does not know Beijing very well
+I know xxx very well
+
+* take out 拿出 take sth out of 从...拿出来
+
+
+I do not speak English
+I cannot speak English
+
+副词变化:
+
+1. 一般直接 + ly quickly
+2. 辅 + y结尾 -> 变y为i + ly lazy->lazily, happy->happily
+3. 以ll结尾，直接+y fully
+4. 辅音 + le，e变为y : able->ably，single->singly
+5. 元音 + e结尾 ，去e + ly : true->truly
+
+
+ly结尾，不是副词，是形容词
+lovely 可爱的
+deadly 救命的
+friendly 友好的
+
+句子组织的五个步骤:
+
+谁、干了什么、如何干的、在哪干的、何时干的
+
+1. 他每天开心地在家等她
+He waits for he happily at home every day
+
+2. 我突然在教室发现一个不认识的人
+I find a stranger suddenly in the classroom
+
+3. 他上周匆忙地离开
+He left hurriedly last week
+
+4. 我昨天忙碌地在商场买了很多鞋
+I bought many shoes busily  in the mall yesterday
+
+
+## 75 Uncomfortable shoes
+
+* ago 以前，常和过去式搭配
+* pair a pair of
+* scissors 剪刀
+* trousers 裤子
+* fashion
+  out of fashion 过时
+  in fashion now 留行
+
+* uncomfortable
+  untidy
+  unhappy
+  unwell
+* wear 穿着 (强调状态)
+  put on 穿上 (强调动作)
+
+第三人称单数、又称一般现在时三单，仅在一般现在时有效，过去式没有三单的概念
+
+She put the book in the bag yesterday
+put 是过去式(yesterday)、所有不用写成puts、
+情态动词后面接动词原型
+
+She drinks some tea every day
+They drink some tea every day
+He can drink some coffee
+He drank a cup of coffee yesterday
+
+介词 + 名词/代词 -> 介词短语，通常作为地点状语、定语(对人和事物进行限定和描述) 作为定语时要放在修饰的词之后
+
+名词所有格就是定语
+
+Mary's room
+Tom's bike
+of our village
+
+* on the table
+* in the room
+* in our town
+
+A friend in need is a friend indeed 在需要的时候出现的朋友，才真的是朋友

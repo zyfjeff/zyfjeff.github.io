@@ -7,12 +7,72 @@ var x int64 = 64000
 var y int16 = int16(x)
 ```
 
+* `GOTRACEBACK=crash` go程序在奔溃的时候产生core dump文件
+
+* `go build -gcflags=all="-N -l"` 关闭编译器优化
+
+* `go build -gcflags="-dwarflocationlists=true"`
+
+The flag causes the compiler to add location lists that helps debuggers work with optimized binaries.
+
+* 无论普通的for循环还是range迭代，其定义的局部变量都会被重复使用
+
+```golang
+package main
+
+func main() {
+	data := [3]string{"a", "b", "c"}
+
+	for i, s := range data {
+		println(&i, &s)
+	}
+}
+
+tianqianzyfdeMacBook-Pro-2:go-study tianqian.zyf$ ./go-study
+0xc000042700 0xc000042718
+0xc000042700 0xc000042718
+0xc000042700 0xc000042718
+```
+
+这会对闭包产生影响，如果闭包引用上述的局部变量，会导致引用的内容是迭代结束后的内容。
+
 
 * range会复制目标数据，受直接影响的是数组，可改用数组指针或切片类型
+
+
+* defer语句的之前是在return语句之后执行的。
+
+```go
+package main
+
+func test() (z int) {
+	defer func() {
+		println("defer:", z)
+		z += 100
+	}()
+
+	return 100
+}
+
+func main() {
+	println("test:", test())
+}
+
+tianqianzyfdeMacBook-Pro-2:go-study tianqian.zyf$ ./go-study
+defer: 100
+test: 200
+```
+
 * 字典切片都是引用类型，拷贝开销低
 * 编译器会进行逃逸分析将栈上变量分配在堆上
-* go build -gcflags "-l -m" 禁用函数内联(-l)，输出优化信息(-m)
+* go build -gcflags "-N -l -m" -N(禁用代码优化) 禁用函数内联(-l)，输出优化信息(-m)
+
+
+
 * []byte和string的头部结构相同可以通unsafe.Pointer来互相转换
+
+* 字符串是不可变，对其修改需要将其转换为`[]byte`或者是`[]rune`，转换的过程是需要重新分配内存和复制的
+
 * golang在编译器层面会对[]byte转换为string进行map查询的时候进行优化，避免string拷贝
 * golang在编译器层面会对string转换[]byte，进行for range迭代时，直接取字节赋值给局部变量
 * string.Join 一次性分配内存等同于bytes.Buffer先Grow事先准备足够的内存
@@ -48,7 +108,29 @@ var y int16 = int16(x)
 * 向已关闭的通道发送数据会引发panic，从已关闭的通道接收数据，返回已缓冲数据或零值，无论收发，nil通道都会阻塞，重复关闭通道会引发panic。
 * 通常使用类型转换来获取单向通道，并分别赋予操作双方，不能在单向通道上做逆向操作，同样close不能作用于接收端，无法将单向通道重新转换回去。
 * 无论是否执行reciver，所有延迟调用都会被执行
-* 连续调用panic，仅最后一个会被recover捕获
+
+* 连续调用panic，仅最后一个会被recover捕获，recover必须在延迟函数中执行才有效
+
+```go
+package main
+
+import "log"
+
+func main() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Fatalln(err)
+		}
+	}()
+
+	panic("I am dead")
+	println("exit.")  // 没有执行
+}
+
+```
+
+* `runtime/debug debug.PrintStack()` 输出完整的调用堆栈信息
+
 * `runtime.GC()` 主动垃圾回收、`GODEBUG="gctrace=1,schedtrace=1000,scheddetail=1"`
 * `sync.Mutex`不能复制会导致失效，所以当包含了`sync.Mutex`的匿名字段的时候，需要将其实现为指针型的receiver，或者嵌入`*sync.Mutex`
 * 包内每一个源码文件都可以定义一到多个初始化函数，但是编译器不保证执行次序，只能保证所有的初始化函数都是单一线程执行的，且仅执行一次
@@ -405,6 +487,13 @@ bridge := func(
 }
 ```
 
+## 编译时检测某个struct是否实现对应的接口
+
+```golang
+// 在struct实现的文件文件中，创建一个匿名全局变量，如下
+var _ 接口类型 = &具体实现的struct{}
+```
+
 ## Garbage Collection
 
 垃圾回收的三个阶段:
@@ -424,7 +513,6 @@ bridge := func(
 ```golang
 
 go 里创建一个 file 时，会默认设置一个 Finalizer，当这个 File 回收时触发，关闭文件 fd，防止 fd 泄露。
-
 在进程不需要文件锁之前，必须要保证文件锁的 file 对象一直是 reachable。可以使用 runtime.KeepAlive。如：
 
 func main() {

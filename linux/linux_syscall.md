@@ -1,4 +1,5 @@
 ## kcmp (4.16)
+
 这个系统调用是用于探测两个进程是否共享一个内核资源，glibc没有封装这个系统调用，
 并且这个系统调用只在内核配置了`CONFIG_CHECKPOINT_RESTORE`选项的时候才开启，
 这个系统调用的目的是为了`checkpoint/restore`的feature。
