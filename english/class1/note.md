@@ -1,29 +1,3 @@
-
-# 语法
-
-* 名词词组
-限定符(如果名词是复数、或者不可数就采用零冠词) + (副词来修饰形容词 形容词(可有可无)) + 名词(每一个部分都有可能或缺)
-英语中凡是用到名词一定是以名词词组的形式出现
-
-可数名词的两大类:
-
-1. 具有固定形状的物体
-2. 度量衡单位
-
-
-* 形容词
-
-
-
-## 冠词
-
-待在名词上的帽子，没有特殊情况不能摘帽子
-
-特殊情况：国家、国籍、人名、城市名
-
-an、a、the等
-the后面接辅音和元音其读音不同
-
 ## 介词
 
 * in 在...里面
@@ -33,7 +7,7 @@ the后面接辅音和元音其读音不同
 * across 从...的一边到另一边
 
 in the sun
-under the teee
+under the tree
 on the tree 长在树上
 in the tree 在树上
 on the board 在甲板上
@@ -1325,7 +1299,7 @@ He was in the office
 
 There was a car race in our town in 1998
 
-1. Was there a car race in our town in 1998
+1. Was there a car race in our town in 1998?
 2. There wasn't a car race in our town in 1998
 3. What was there in our town in 1998?
 
@@ -1462,3 +1436,298 @@ of our village
 * in our town
 
 A friend in need is a friend indeed 在需要的时候出现的朋友，才真的是朋友
+
+
+## 77 Terrible toothache
+
+* appointment 约会、预约
+* urgent 紧急的、紧迫的  urgent to do
+
+
+否定疑问句: 一般疑问句的问词 + not的缩略式
+
+Are you ok? -> Aren't you ok?
+Do you know that? -> Don't you know that?
+Can you wait? -> Can't you wait?
+
+何时用?
+
+1. 表达强调 Aren't you lucky!
+
+2. 表达情绪 Don't you love me?
+
+组织步骤:
+
+一般疑问句(先看词性 + 再看人称) + not
+
+* 难道她不漂亮(形容词，需要使用系动词)吗？
+
+Is she beautiful?
+Isn't she beautiful?
+
+* 难道她(第三人称单数，三单形式)没有(动词，需要使用助动词Do)男朋友吗?
+Does she have a boyfriend?
+Doesn't she have a boyfriend?
+
+* 难道你昨天没去约会(动词)吗?
+
+Did you have a date yesterday?
+Didn't you have a date yesterday?
+
+* 难道你就不能(情态动词)温柔一点吗?
+
+Can you be tender?
+Can't you be tender?
+
+
+## 79 Carol's shopping list
+
+* make
+  1. 制造
+  2. 制作 make a film
+  3. 产生、引起 make a noise
+  4. 写
+  5. 挣
+
+* have got、has got (固定结构，英式英语) 拥有 == have or has (美式英语)
+
+* He has got a new bike => He's got a new bike has也缩写成 He's了
+
+* many vs much vs a lot of
+  many 主要用于疑问句和否定句中、放在可数名词前
+  much 用于疑问句和否定句中，放在不可数名词前
+  a lot of 许多，用在肯定句中，既可用于不可数名词，也可以用于可数名词
+
+* I have got a new bike (have 视为助动词，美式英语中的have不能视为助动词)
+
+Have i got a new bike?、 Yes I have
+I haven't got a new bike
+What have you got?
+
+* 过去时态下，一般只用had、不用got，无论英式英语还是美式英语
+
+* 用not或no构成的否定句中，要用or连接对等的词
+
+* 部分否定 (much和many 在否定句中表示部分否定)，完全否定(any，无论可数还是不可数)
+  1. 我们的牛奶不多 We haven't got much milk
+  2. 他们的苹果不多了 They don't haven many apple
+  3. 她的巧克力不多了 She hasn't got much chocolate
+  4. 他的鸡蛋不多了 He hasn't got many eggs
+
+
+
+## 81 Roast beef and patatoes
+
+* Sam's here sam来了，表示xxx来了
+* Have a cigarette 抽根烟
+* I nearly die
+* Then no 那就算了吧
+* breakfast早餐、lunch午餐、dinner晚餐、正餐
+* roast 烤的、roast duck烤鸭
+* have a haircut 去理发
+* dinner party 宴会
+* holiday(英式)、vocation(美式)
+* biscuit 小点心、饼干
+
+have:
+  1. 实义动词 has、had
+    * 拥有  I have a close friend in Beijing
+    * 生病
+    * 吃、喝、玩、乐、做  洗澡(have a bath)、have a swim、have a haircut、have a party
+  2. 现在完成式(主语 + have(has) + done)，无意义，只能用来做现在完成时
+
+
+## 83 Going to holidy
+
+* mess 杂乱、凌乱
+* untidy
+* suitcase 手提箱
+
+现在完成时:
+
+主语 + have/has + 动词的过去分词 + 其他成分
+
+1. 表示在过去不确定的时间里发生的，并与现在有着某种联系的动作
+2. 表示开始与过去并持续到现在的动作
+
+I have(助动词) finished my work
+
+* Have you finished my work? Yes I have、No, I haven't
+* I haven't finished my work
+* What have you finished?
+* Who has finished the work?
+
+
+动词原型 -> 过去分词:
+
+不规则动词:
+go、went、gone
+read、read、read
+put、put、put
+is been
+
+规则动词: 和如何变成过去式一致
+* 动词 + ed worked
+* 动词 + d  arrived
+* 辅音 + ied  -> study studied
+* 辅音 + 1元音 + 1辅音
+
+1. 说话人主观上强调过去的动作或状态的延续性，其持续到现在
+
+我学过英语 一般过去式
+我学英语十年了。 现在完成时
+
+2. 言之过去、意在当下
+
+1. 要不要和我们一起吃晚饭?
+不、谢谢，我已经吃过了，现在
+
+3. 具体的、表过去的时间状语往往不能用在现在完成时的句子
+
+  1. yesterday
+  2. the day before yesterday
+  3. ago
+  4. at 4:00/6:30...
+  .....
+
+
+## 85 Paris in the spring
+
+* cinema 电影院
+* just now 刚刚(一般过去)
+* just (现在完成时)
+* 夹着，在英文中表示的是介词，并不是动词，用between表示
+* have been to ... 到过...
+* He has been there 到过那里
+* What's on? 上演了什么电影
+
+主语 + have/has + been + 非动词
+
+1. been to 去过
+2. gone to 去了
+
+
+副词可以直接跟在动词后面修饰动词，名词则需要集合介词来修饰动词
+
+1. Have you ever been there(地点副词，可以直接修饰动词there)?
+2. Have you just been to the cinema
+
+
+漂亮:
+1. nice
+2. smart
+3. lovely
+4. good-looking
+5. gorgeous
+
+never:
+
+* 一般现在时
+
+He never(实义动词前) gets up early
+She is never(系动词后) late
+实前系后
+
+* 现在完成时
+
+I have never left 我从未离开
+I have never... 现在完成的否定形式
+
+* 一些短语中
+
+Never give up!
+Never fear!
+Never mind! 完全没关系
+
+
+ever:
+
+1. 等同于always
+Honesty ever pays 诚实永远有回报
+
+2. 一般过去(疑问句中)
+Did you ever see such a man?
+
+3. 现在完成(疑问句中)
+Have you ever....?
+
+4. 口语中
+Don't ever do it! = Never do it!
+
+一般过去时 vs 现在完成时
+
+1. 结构
+现在完成: 主语 + have/has + done
+一般过去: 主语 + was/were/did
+
+2. 用法
+现在完成: 过去发生、影响现在
+一般过去: 过去发生、与现在无关
+
+3. 时间状语
+现在完成时: just、already、before、never、ever、yet
+一般过式: yesterday、last..、...ago、just now
+
+4. 口语功能
+现在完成时: 引起话题
+一般过去: 具体谈论
+
+
+Have you ever...?
+
+
+## 87 A car crash
+
+yet: 副词、疑问句尾表示 "已经"、否定句尾表示 "还"
+
+Example:
+  Is my car ready yet? 我的车已经准备好了吗?
+
+
+yet vs already
+
+Has he arrived already?
+Have you read this book already?
+
+licence plate number 车牌号
+
+attendant 接待员
+lamp 灯
+post 邮政、柱、杆
+
+
+## 89
+
+* I believe that this house is for sale
+* May I have a look at it, please?
+* I've lived here for twenty years
+* I have been here since 1976
+* How much does this house cose?
+* It's worth every penny of it
+* Women always have the last word
+
+have the last word 说了算
+
+believe 相信、认为
+think
+feel 感觉、认为
+hold 握住、坚持认为
+consider 考虑、认为
+
+轮换不同的词来写作，而不是从头到尾就一个词。
+I think .....
+I also believe
+I still feel ...
+Do you consider so?
+
+
+May I ...?
+How long 多久
+since 自从
+  1. since + 时间点 She has been in Beijing since 2004
+  2. since + n She hasn't been out since the accident
+
+sale 卖(名词) big sale
+because:
+  1. because + of + n
+  2. because + 句子

@@ -1,4 +1,28 @@
-# 编程实践
+# C++基础
+
+## Literal Type
+
+C++ core language对其进行了定义，一个LiteralType类型满足下面的要求:
+
+1. 可以带有cv限制符的void
+2. 基本类型(scalar type)
+3. 引用类型
+4. lister type的数组
+5. 可以带有cv限制符的class类型，但是需要同时满足下面需求:
+  1. 有trivial destructor
+  2. 下面任何一个需求
+    1. Aggregate Type
+    2. 类型中至少有一个constexpr构造函数，并且不是copy或者move构造
+    3. 一个closure type
+  3. 如果是unions类型，那么至少有一个非static的数据成员是 non-volatile literal type
+  4. 如果不是unions类型，那么所有的非static数据成员，以及基类都需要是 non-volatile literal type
+  5. 所有的非static数据成员，以及基类都需要是 non-volatile literal type
+
+Only literal types may be used as parameters to or returned from constexpr functions. Only literal classes may have constexpr member functions.
+
+只有listeral type才可以作为constexpr函数的参数和返回值。只有literal type的类才可能有constexpr成员函数
+
+## Aggregate Type
 
 ## static and thread local Initialization
 这两类变量被称为Non-local variables，static变量会在main函数启动之前进行初始化(除非主动deferred)，所有的thread_local
@@ -383,6 +407,7 @@ int main() {
 Ref: https://en.cppreference.com/w/cpp/language/if#Constexpr_If
 
 ## Curiously Recurring Template Pattern (CRTP)
+
 递归的奇异模版，有两个特点:
 1. 从模版类继承
 2. 使用派生类自己作为基类的模版参数

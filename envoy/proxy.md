@@ -1550,7 +1550,71 @@ void ConnectionManagerImpl::onDrainTimeout() {
 ```
 
 
+
+## xDS resource patching
+
+目前endpoint整体是一个resource，xDS的增量只能是resource粒度的增加和减少，对于endpoint来说，他整体就是一个resource，做不了增量的加和减少，因此社区提出了xDS resource patching的机制
+可以针对一个resource内部做merge、add、remove、modtify等操作，目前还在review中。
+
+https://github.com/envoyproxy/envoy/issues/8400
+
+## rebalance
+
+用于在多个worker线程之间平衡连接数，目前使用的epoll的方式内核的分配策略是LIFO，会导致连接会分配到固定的前几个worker线程中，这个在大多数情况是OK的，但是对于envoy egress http2
+这种少量长连接的场景来说并不是太适合，这种场景连接数并不多，但是连接上的负载很大。
+
+* https://github.com/envoyproxy/envoy/pull/8422
+* https://blog.cloudflare.com/the-sad-state-of-linux-socket-balancing/
+
+
 ## HTTP dynamic forward proxy
+
+目前Envoy是支持dynamic forward(istio使用这个能力做egress)，这是通过iptables来实现的，通过iptables保留实际要访问的真实ip(也可以是通过http的header x-envoy-original-dst-host 来传递)，然后通过这个ip动态添加到cluster中，但这个方案并不通用依赖iptables，HTTP dynamic forward proxy则是使用http host header进行动态dns解析，然后通过新增的cluster type(dynamic_forward_proxy)来实现将动态解析的DNS结果放到集群中并把解析结果缓存起来，当第一次请求的时候没有对应的DNS解析结果时，会通过新增的http dynamic forward proxy filter中断当前的请求，然后异步进行DNS解析，等解析完成后再继续转发请求。后续请求进来的时候，直接使用DNS的缓存结果进行请求转发。
+
+https://github.com/envoyproxy/envoy/pull/7307
+
+## on-demand VHDS
+
+`RouteConfiguration`下面包含了`route.VirtualHost`，`route.VirtualHost`里面再包含Route和Action，istio创建virtual service的时候，会导致整个`RouteConfiguration`都发生更新，实际只是新增一个`VirtualHost`或者，是更新一个`VirtualHost`条目。通过VHDS可以将`RouteConfiguration`和`VirtualHost`解耦。结合差量更新还可以做到按需更新。此外这里的on-demand指的是当发起请求的时候，会通过on-demand filter去服务端查询对应的路由条目，然后合并到`RouteConfiguration`中，而不是一次性全下发下来。
+
+https://github.com/envoyproxy/envoy/pull/8617
+
+
+## stats symbol优化
+
+引入symbol tables，将一个metrics按照"."号分割成多个部分，每一个部分进行编码存在symbol table中，并分配一个symbol id，重复引用相同的部分仅需要保存symbol id，通过这个id来找到对应的字符串。
+
+https://github.com/envoyproxy/envoy/pull/5321
+
+
+## wasm
+
+目前wasm主要是google的人在主导，有一个独立的仓库envoy-wasm，目前istio已经在使用这个仓库做一些实验性的功能，将mixer的部分能力通过wasm的方式来提供，与此同时wasm的代码也在同步提交到
+Envoy官方社区，一旦全部合并进去，istio会将仓库重新指向envoy官方昂哭。
+
+https://github.com/envoyproxy/envoy/pulls?utf8=%E2%9C%93&q=wasm
+https://istio.io/docs/ops/telemetry/in-proxy-service-telemetry/
+
+
+## adaptive concurrency
+
+参考Netflix’s concurrency limits Java library.的算法实现了一个七层的http filter，用来做自适应的并发限流。
+
+
+https://github.com/envoyproxy/envoy/pull/8582
+https://github.com/envoyproxy/envoy/issues/7789
+https://github.com/Netflix/concurrency-limits
+
+
+The adaptive concurrency filter dynamically adjusts the allowed number of requests that can be
+outstanding (concurrency) to all hosts in a given cluster at any time. Concurrency values are
+calculated using latency sampling of completed requests and comparing the measured samples in a time
+window against the expected latency for hosts in the cluster.
+
+一个http filter，用于动态调整允许发出去的请求，并发度通过对已完成请求的延迟采样和一个时间窗口中测量的样本进行比较，群集中主机的预期延迟。
+
+Gradient Controller: 梯度控制器根据定期测量的理想round-trip时间
+Concurrency Controllers:  实现了一个算法，用于对每一个请求负责转发的决策，并记录延迟用来计算并发限制
 
 
 ## Initialization
@@ -1822,4 +1886,459 @@ SymbolVec SymbolTableImpl::Encoding::decodeSymbols(const SymbolTable::Storage ar
 1. 每次从Storage中那一个`uint8_t`，然后转换为`uint32_t`，因为Symbol的类型就是`uint32_t`
 2. 接着通过和`Low7Bits`相或拿到低7位的值
 3. 判断`SpilloverMask`位是否是0，如果是0那就是一个完整的`Symbol`直接放到SymbolVec即可
-4. 如果是1表面，Symbol还要继续组装，再次读取一个uint8_t，然后取低7位，这个时候，需要向左移动7位，因为Symbol的每一个部分都是7位组成，依次排放的。
+4. 如果是1表明，Symbol还要继续组装，再次读取一个uint8_t，然后取低7位，这个时候，需要向左移动7位，因为Symbol的每一个部分都是7位组成，依次排放的。
+
+
+
+## Grpc & xDS
+
+`Grpc::AsyncStreamCallbacks` 提供了`onReceiveMessage`的回调，通过`Grpc::AsyncStream`发出message后，通过这个callback获得返回的消息
+
+`Grpc::AsyncClient` grpc Client 来创建一个`Grpc::AsyncStream`
+
+`GrpcStream` Grpc中的一个流是对`Grpc::AsyncStream`的封装，继承自`Grpc::AsyncStreamCallbacks`，提供了一个` void onReceiveMessage(std::unique_ptr<ResponseProto>&& message) override`接口
+用于返回收到的message，组合了`Grpc::AsyncClient`用来创建`Grpc::AsyncStream`，提供了sendMessage来发送`stream`，同时也提供了`onReceiveMessage`，当收到message后，回调`GrpcStreamCallbacks`的onDiscoveryResponse方法
+
+`GrpcStreamCallbacks`，提供了几个和stream相关的callback
+
+```C++
+template <class ResponseProto> class GrpcStreamCallbacks {
+public:
+  virtual ~GrpcStreamCallbacks() = default;
+
+  /**
+   * For the GrpcStream to prompt the context to take appropriate action in response to the
+   * gRPC stream having been successfully established.
+   */
+  virtual void onStreamEstablished() PURE;
+
+  /**
+   * For the GrpcStream to prompt the context to take appropriate action in response to
+   * failure to establish the gRPC stream.
+   */
+  virtual void onEstablishmentFailure() PURE;
+
+  /**
+   * For the GrpcStream to pass received protos to the context.
+   */
+  virtual void onDiscoveryResponse(std::unique_ptr<ResponseProto>&& message) PURE;
+
+  /**
+   * For the GrpcStream to call when its rate limiting logic allows more requests to be sent.
+   */
+  virtual void onWriteable() PURE;
+};
+```
+
+`GrpcSubscriptionImpl`
+
+`Config::Subscription` 所有订阅的抽象接口，提供了start和updateResourceInterest来更新资源的订阅，目前有几个实现:
+
+1. `GrpcSubscriptionImpl` 对应xDS
+2. `GrpcMuxSubscriptionImpl` 对应ADS
+3. `DeltaSubscriptionImpl` 增量xDS
+4. `GrpcMuxSubscriptionImpl` 增量ADS
+5. `HttpSubscriptionImpl` REST
+
+
+`GrpcMuxImpl` 通过调用底层的`GrpcStream`来发送stream，同时继承了`GrpcStreamCallbacks`用来接收stream返回的message
+
+`SubscriptionCallbacks` 提供`onConfigUpdate`、`onConfigUpdateFailed`、`resourceName`等回调，每一个xDS类型都继承这个callback用来接收配置更新的通知
+
+`GrpcMux` 用来管理单个stream上的多个订阅的，典型的就是ADS stream上处理EDS、CDS、LDS等订阅，主要是提供了start、pause、resume、addOrUpdateWatch等等
+
+`GrpcMuxWatch`
+
+`GrpcMuxWatchImpl` 继承 `GrpcMuxWatch` 每订阅一次资源就创建一个`GrpcMuxWatchImpl`，析构的时候可以用来进行cancel资源订阅。
+
+`GrpcMuxCallbacks` 核心的ADS回调，用于对接收到的xDS资源进行对应的回调，核心接口是:
+
+```C++
+class GrpcMuxCallbacks {
+public:
+  virtual ~GrpcMuxCallbacks() = default;
+
+  /**
+   * Called when a configuration update is received.
+   * @param resources vector of fetched resources corresponding to the configuration update.
+   * @param version_info update version.
+   * @throw EnvoyException with reason if the configuration is rejected. Otherwise the configuration
+   *        is accepted. Accepted configurations have their version_info reflected in subsequent
+   *        requests.
+   */
+  virtual void onConfigUpdate(const Protobuf::RepeatedPtrField<ProtobufWkt::Any>& resources,
+                              const std::string& version_info) PURE;
+
+  /**
+   * Called when either the subscription is unable to fetch a config update or when onConfigUpdate
+   * invokes an exception.
+   * @param reason supplies the update failure reason.
+   * @param e supplies any exception data on why the fetch failed. May be nullptr.
+   */
+  virtual void onConfigUpdateFailed(Envoy::Config::ConfigUpdateFailureReason reason,
+                                    const EnvoyException* e) PURE;
+
+  /**
+   * Obtain the "name" of a v2 API resource in a google.protobuf.Any, e.g. the route config name for
+   * a RouteConfiguration, based on the underlying resource type.
+   */
+  virtual std::string resourceName(const ProtobufWkt::Any& resource) PURE;
+};
+```
+
+
+```C++
+class Subscription {
+public:
+  virtual ~Subscription() = default;
+
+  /**
+   * Start a configuration subscription asynchronously. This should be called once and will continue
+   * to fetch throughout the lifetime of the Subscription object.
+   * @param resources set of resource names to fetch.
+   */
+  virtual void start(const std::set<std::string>& resource_names) PURE;
+
+  /**
+   * Update the resources to fetch.
+   * @param resources vector of resource names to fetch. It's a (not unordered_)set so that it can
+   * be passed to std::set_difference, which must be given sorted collections.
+   */
+  virtual void updateResourceInterest(const std::set<std::string>& update_to_these_names) PURE;
+};
+```
+
+
+## InitManager
+
+`WatcherHandle`、`Mannager`、`Target`、`TargetHandle`、`Watcher`、`WatcherHandle`
+
+一个WatcherImpl持有一个ReadyFn的回调，通过WatcherImpl可以创建WatcherHandle持有对ReadyFn的弱回调。
+TargetImpl和TargetHandleImpl和WatcherImpl和WatcherHandle类似，只是前者是持有ReadyFn后者是持有InternalInitalizeFn
+
+
+## Cluster初始化
+
+1. 创建`ClusterManagerImpl`
+
+```C++
+// 入口是configuration_impl.c文件，MainImpl::initialize
+void MainImpl::initialize(const envoy::config::bootstrap::v2::Bootstrap& bootstrap,
+                          Instance& server,
+                          Upstream::ClusterManagerFactory& cluster_manager_factory) {
+  //.....
+  ENVOY_LOG(info, "loading {} cluster(s)", bootstrap.static_resources().clusters().size());
+  cluster_manager_ = cluster_manager_factory.clusterManagerFromProto(bootstrap);
+  .....
+
+
+// 创建ClusterManagerImpl
+ClusterManagerPtr ProdClusterManagerFactory::clusterManagerFromProto(
+    const envoy::config::bootstrap::v2::Bootstrap& bootstrap) {
+  return ClusterManagerPtr{new ClusterManagerImpl(
+      bootstrap, *this, stats_, tls_, runtime_, random_, local_info_, log_manager_,
+      main_thread_dispatcher_, admin_, validation_context_, api_, http_context_)};
+}
+```
+
+通过bootstrap获取静态集群，然后通过clusterManagerFromProto方法构建`ClusterManagerImpl`
+
+2. 创建静态Cluster并更新到thread local中
+
+```C++
+  // Cluster loading happens in two phases: first all the primary clusters are loaded, and then all
+  // the secondary clusters are loaded. As it currently stands all non-EDS clusters and EDS which
+  // load endpoint definition from file are primary and
+  // (REST,GRPC,DELTA_GRPC) EDS clusters are secondary. This two phase
+  // loading is done because in v2 configuration each EDS cluster individually sets up a
+  // subscription. When this subscription is an API source the cluster will depend on a non-EDS
+  // cluster, so the non-EDS clusters must be loaded first.
+  for (const auto& cluster : bootstrap.static_resources().clusters()) {
+    // First load all the primary clusters.
+    if (cluster.type() != envoy::api::v2::Cluster::EDS ||
+        (cluster.type() == envoy::api::v2::Cluster::EDS &&
+         cluster.eds_cluster_config().eds_config().config_source_specifier_case() ==
+             envoy::api::v2::core::ConfigSource::ConfigSourceSpecifierCase::kPath)) {
+      loadCluster(cluster, "", false, active_clusters_);
+    }
+  }
+```
+
+遍历所有的Cluster，先创建所有的Primary类型的Cluster、然后创建ADS和CDS API等对象，然后载入所有的静态定义的EDS cluster等。
+最后通过thread local进行更新，创建`ThreadLocalClusterManagerImpl`结构。
+
+```C++
+  // Once the initial set of static bootstrap clusters are created (including the local cluster),
+  // we can instantiate the thread local cluster manager.
+  tls_->set([this, local_cluster_name](
+                Event::Dispatcher& dispatcher) -> ThreadLocal::ThreadLocalObjectSharedPtr {
+    return std::make_shared<ThreadLocalClusterManagerImpl>(*this, dispatcher, local_cluster_name);
+```
+
+3. thread local中更新集群，并创建LoadBalancer
+
+
+```C++
+  for (auto& cluster : parent.active_clusters_) {
+    // If local cluster name is set then we already initialized this cluster.
+    if (local_cluster_name && local_cluster_name.value() == cluster.first) {
+      continue;
+    }
+
+    ENVOY_LOG(debug, "adding TLS initial cluster {}", cluster.first);
+    ASSERT(thread_local_clusters_.count(cluster.first) == 0);
+    thread_local_clusters_[cluster.first] = std::make_unique<ClusterEntry>(
+        *this, cluster.second->cluster_->info(), cluster.second->loadBalancerFactory());
+  }
+```
+
+从主线程中获取所有的集群，然后创建ClusterEntry，然后更新到自己的Thread Local中，ClusterEntry中会创建LoadBalancer
+
+4. 静态集群初始化
+
+```C++
+
+
+  // Proceed to add all static bootstrap clusters to the init manager. This will immediately
+  // initialize any primary clusters. Post-init processing further initializes any thread
+  // aware load balancer and sets up the per-worker host set updates.
+  for (auto& cluster : active_clusters_) {
+    init_helper_.addCluster(*cluster.second->cluster_);
+  }
+
+
+void ClusterManagerInitHelper::addCluster(Cluster& cluster) {
+  // See comments in ClusterManagerImpl::addOrUpdateCluster() for why this is only called during
+  // server initialization.
+  ASSERT(state_ != State::AllClustersInitialized);
+
+  const auto initialize_cb = [&cluster, this] { onClusterInit(cluster); };
+  if (cluster.initializePhase() == Cluster::InitializePhase::Primary) {
+    primary_init_clusters_.push_back(&cluster);
+    cluster.initialize(initialize_cb);
+  } else {
+    ASSERT(cluster.initializePhase() == Cluster::InitializePhase::Secondary);
+    secondary_init_clusters_.push_back(&cluster);
+    if (started_secondary_initialize_) {
+      // This can happen if we get a second CDS update that adds new clusters after we have
+      // already started secondary init. In this case, just immediately initialize.
+      cluster.initialize(initialize_cb);
+    }
+  }
+
+  ENVOY_LOG(debug, "cm init: adding: cluster={} primary={} secondary={}", cluster.info()->name(),
+            primary_init_clusters_.size(), secondary_init_clusters_.size());
+}
+
+void ClusterImplBase::initialize(std::function<void()> callback) {
+  ASSERT(!initialization_started_);
+  ASSERT(initialization_complete_callback_ == nullptr);
+  initialization_complete_callback_ = callback;
+  startPreInit();
+}
+```
+
+遍历所有的集群，然后调用initialize进行初始化，这个函数内部会调用每一个Cluster的`startPreInit`方法，用于做一些集群的前置初始化等。
+例如: 对于DNS Cluster来说就是进行DNS解析，对于static Cluster来说就是添加host。
+
+```C++
+void StrictDnsClusterImpl::startPreInit() {
+  for (const ResolveTargetPtr& target : resolve_targets_) {
+    target->startResolve();
+  }
+}
+
+void StaticClusterImpl::startPreInit() {
+  // At this point see if we have a health checker. If so, mark all the hosts unhealthy and
+  // then fire update callbacks to start the health checking process.
+  const auto& health_checker_flag =
+      health_checker_ != nullptr
+          ? absl::optional<Upstream::Host::HealthFlag>(Host::HealthFlag::FAILED_ACTIVE_HC)
+          : absl::nullopt;
+
+  auto& priority_state = priority_state_manager_->priorityState();
+  for (size_t i = 0; i < priority_state.size(); ++i) {
+    if (priority_state[i].first == nullptr) {
+      priority_state[i].first = std::make_unique<HostVector>();
+    }
+    priority_state_manager_->updateClusterPrioritySet(
+        i, std::move(priority_state[i].first), absl::nullopt, absl::nullopt, health_checker_flag,
+        overprovisioning_factor_);
+  }
+  priority_state_manager_.reset();
+
+  onPreInitComplete();
+}
+```
+
+初始化完成后，都会调用一个`onPreInitComplete`方法来表示前置初始化完毕(对于StrictDnsClusterImpl来说是等到host解析完毕或者失败，才会去调用onPreInitComplete)
+所以`onPreInitComplete`的调用是一个异步的过程，只是对于static Cluster来说是立即执行的。
+
+```C++
+void ClusterImplBase::onPreInitComplete() {
+  // Protect against multiple calls.
+  if (initialization_started_) {
+    return;
+  }
+  initialization_started_ = true;
+
+  ENVOY_LOG(debug, "initializing secondary cluster {} completed", info()->name());
+  init_manager_.initialize(init_watcher_);
+}
+```
+
+onPreInitComplete中调用`Init::ManagerImpl`进行初始化所有的target，最后调用init_watcher_的ReadFn
+
+```C++
+init_watcher_("ClusterImplBase", [this]() { onInitDone(); })
+
+void ClusterImplBase::onInitDone() {
+  if (health_checker_ && pending_initialize_health_checks_ == 0) {
+    for (auto& host_set : prioritySet().hostSetsPerPriority()) {
+      pending_initialize_health_checks_ += host_set->hosts().size();
+    }
+
+    // TODO(mattklein123): Remove this callback when done.
+    health_checker_->addHostCheckCompleteCb([this](HostSharedPtr, HealthTransition) -> void {
+      if (pending_initialize_health_checks_ > 0 && --pending_initialize_health_checks_ == 0) {
+        finishInitialization();
+      }
+    });
+  }
+
+  if (pending_initialize_health_checks_ == 0) {
+    finishInitialization();
+  }
+}
+
+```
+
+然后调用`finishInitialization`
+
+```C++
+
+void ClusterImplBase::finishInitialization() {
+  ASSERT(initialization_complete_callback_ != nullptr);
+  ASSERT(initialization_started_);
+
+  // Snap a copy of the completion callback so that we can set it to nullptr to unblock
+  // reloadHealthyHosts(). See that function for more info on why we do this.
+  auto snapped_callback = initialization_complete_callback_;
+  initialization_complete_callback_ = nullptr;
+
+  if (health_checker_ != nullptr) {
+    reloadHealthyHosts(nullptr);
+  }
+
+  if (snapped_callback != nullptr) {
+    snapped_callback();
+  }
+}
+```
+
+然后调用`initialization_complete_callback_`也就是addCluster中的initialize_cb。
+
+```C++
+const auto initialize_cb = [&cluster, this] { onClusterInit(cluster); };
+```
+
+
+在这个函数中主要就是设置`addMemberUpdateCb`、`addPriorityUpdateCb`等 最后更新thread local
+
+```C++
+void ClusterManagerImpl::onClusterInit(Cluster& cluster);
+
+  // Finally, if the cluster has any hosts, post updates cross-thread so the per-thread load
+  // balancers are ready.
+  for (auto& host_set : cluster.prioritySet().hostSetsPerPriority()) {
+    if (host_set->hosts().empty()) {
+      continue;
+    }
+    postThreadLocalClusterUpdate(cluster, host_set->priority(), host_set->hosts(), HostVector{});
+  }
+```
+
+
+```C++
+void ClusterManagerImpl::postThreadLocalClusterUpdate(const Cluster& cluster, uint32_t priority,
+                                                      const HostVector& hosts_added,
+                                                      const HostVector& hosts_removed) {
+  const auto& host_set = cluster.prioritySet().hostSetsPerPriority()[priority];
+
+  tls_->runOnAllThreads([this, name = cluster.info()->name(), priority,
+                         update_params = HostSetImpl::updateHostsParams(*host_set),
+                         locality_weights = host_set->localityWeights(), hosts_added, hosts_removed,
+                         overprovisioning_factor = host_set->overprovisioningFactor()]() {
+    ThreadLocalClusterManagerImpl::updateClusterMembership(
+        name, priority, update_params, locality_weights, hosts_added, hosts_removed, *tls_,
+        overprovisioning_factor);
+  });
+}
+
+void ClusterManagerImpl::ThreadLocalClusterManagerImpl::updateClusterMembership(
+    const std::string& name, uint32_t priority, PrioritySet::UpdateHostsParams update_hosts_params,
+    LocalityWeightsConstSharedPtr locality_weights, const HostVector& hosts_added,
+    const HostVector& hosts_removed, ThreadLocal::Slot& tls, uint64_t overprovisioning_factor) {
+
+  ThreadLocalClusterManagerImpl& config = tls.getTyped<ThreadLocalClusterManagerImpl>();
+
+  ASSERT(config.thread_local_clusters_.find(name) != config.thread_local_clusters_.end());
+  const auto& cluster_entry = config.thread_local_clusters_[name];
+  ENVOY_LOG(debug, "membership update for TLS cluster {} added {} removed {}", name,
+            hosts_added.size(), hosts_removed.size());
+  cluster_entry->priority_set_.updateHosts(priority, std::move(update_hosts_params),
+                                           std::move(locality_weights), hosts_added, hosts_removed,
+                                           overprovisioning_factor);
+
+  // If an LB is thread aware, create a new worker local LB on membership changes.
+  if (cluster_entry->lb_factory_ != nullptr) {
+    ENVOY_LOG(debug, "re-creating local LB for TLS cluster {}", name);
+    cluster_entry->lb_ = cluster_entry->lb_factory_->create();
+  }
+}
+```
+
+最后完成所有的static集群的初始化工作
+
+```
+void ClusterManagerInitHelper::onStaticLoadComplete() {
+  ASSERT(state_ == State::Loading);
+  state_ = State::WaitingForStaticInitialize;
+  maybeFinishInitialize();
+}
+```
+quit
+
+在`maybeFinishInitialize`中会进行secondary集群的初始化工作。
+
+```C++
+  started_secondary_initialize_ = false;
+  if (state_ == State::WaitingForStaticInitialize && cds_) {
+    ENVOY_LOG(info, "cm init: initializing cds");
+    state_ = State::WaitingForCdsInitialize;
+    cds_->initialize();
+  } else {
+    ENVOY_LOG(info, "cm init: all clusters initialized");
+    state_ = State::AllClustersInitialized;
+    if (initialized_callback_) {
+      initialized_callback_();
+    }
+  }
+
+void ClusterManagerInitHelper::initializeSecondaryClusters() {
+  started_secondary_initialize_ = true;
+  // Cluster::initialize() method can modify the list of secondary_init_clusters_ to remove
+  // the item currently being initialized, so we eschew range-based-for and do this complicated
+  // dance to increment the iterator before calling initialize.
+  for (auto iter = secondary_init_clusters_.begin(); iter != secondary_init_clusters_.end();) {
+    Cluster* cluster = *iter;
+    ++iter;
+    ENVOY_LOG(debug, "initializing secondary cluster {}", cluster->info()->name());
+    cluster->initialize([cluster, this] { onClusterInit(*cluster); });
+  }
+}
+```
+
+
+
+`ClusterFactoryContext`: 传递给`ClusterFactory`的一些上下文信息

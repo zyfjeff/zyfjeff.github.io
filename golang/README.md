@@ -526,3 +526,33 @@ func main() {
     r.run()
 }
 ```
+
+
+## debouncing
+
+通过一个timer来实现了一个防抖动，避免大量event导致callback调用多次。
+
+```golang
+// Add to the FileWatcher the provided file and execute the provided function
+// on any change event for this file.
+// Using a debouncing mechanism to avoid calling the callback multiple times
+// per event.
+func (s *Server) addFileWatcher(file string, callback func()) {
+	_ = s.fileWatcher.Add(file)
+	go func() {
+		var timerC <-chan time.Time
+		for {
+			select {
+			case <-timerC:
+				timerC = nil
+				callback()
+			case <-s.fileWatcher.Events(file):
+				// Use a timer to debounce configuration updates
+				if timerC == nil {
+					timerC = time.After(100 * time.Millisecond)
+				}
+			}
+		}
+	}()
+}
+```

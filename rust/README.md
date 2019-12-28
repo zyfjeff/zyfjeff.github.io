@@ -190,7 +190,7 @@ impl Graph for MyGraph {
 fn cloning_machine<T: Clone>(t: T) -> (T, T) {
     (t.clone(), t.clone())
 }
-// 痛where语句来选择
+// where语句来选择
 fn cloning_machine_2<T>(t: T) -> (T, T)
         where T: Clone {
     (t.clone(), t.clone())
@@ -550,6 +550,21 @@ fn main() {
 * error handling 针对Option或Result处理方式相同
 
   1. `panic!`
+
+```rust
+fn guess(n: i32) -> bool {
+    if n < 1 || n > 10 {
+        panic!("Invalid number: {}", n);
+    }
+
+    n == 5
+}
+
+fn main() {
+    guess(11);
+}
+```
+
   2. `unwrap()`等同于match的时候，遇到error或None触发`panic!`
 
 ```rust
@@ -562,9 +577,18 @@ impl<T> Option<T> {
     }
   }
 }
+
+use std::env;
+
+fn main() {
+  let mut argv = env::args();
+  let arg: String = argv.nth(1).unwrap();
+  let n: i32 = arg.parse().unwrap();
+  println!("{}", 2 * n);
+}
 ```
 
-  3. `unwrap_or`
+  3. `unwrap_or` 从Option中获取值，如果是None就返回指定的默认值
 
 ```rust
 fn unwrap_or<T>(option: Option<T>, default: T) -> T {
@@ -573,8 +597,18 @@ fn unwrap_or<T>(option: Option<T>, default: T) -> T {
         Some(value) => value,
     }
 }
+
+use std::env;
+
+fn main() {
+  let mut argv = env::args();
+  let arg: String = argv.nth(1).unwrap_or(String::from("unknow number"));
+  let n: i32 = arg.parse().unwrap_or(2);
+  println!("arg: {}, number: {}", arg, 2 * n);
+}
 ```
-  4. `map` 将Option解开，如果不是None就回调function，最后将返回值包装成Option
+
+  4. `map` 将Option解开，如果不是None就回调function，最后将返回值包装成Option，本质上是一种Option转换成另外一种Option
 
 ```rust
 fn map<F, T, A>(option: Option<T>, f: F) -> Option<A> where F: FnOnce(T) -> A {
@@ -582,6 +616,22 @@ fn map<F, T, A>(option: Option<T>, f: F) -> Option<A> where F: FnOnce(T) -> A {
         None => None,
         Some(value) => Some(f(value)),
     }
+}
+
+// Searches `haystack` for the Unicode character `needle`. If one is found, the
+// byte offset of the character is returned. Otherwise, `None` is returned.
+fn find(haystack: &str, needle: char) -> Option<usize> {
+    for (offset, c) in haystack.char_indices() {
+        if c == needle {
+            return Some(offset);
+        }
+    }
+    None
+}
+
+fn main() {
+  let m = find("findstring", 'd');
+  println!("size: {}", m.map(|x| (x + 100).to_string() + "oo").unwrap());
 }
 ```
 
@@ -595,9 +645,33 @@ fn and_then<F, T, A>(option: Option<T>, f: F) -> Option<A>
         Some(value) => f(value),
     }
 }
+
+// Searches `haystack` for the Unicode character `needle`. If one is found, the
+// byte offset of the character is returned. Otherwise, `None` is returned.
+fn find(haystack: &str, needle: char) -> Option<usize> {
+    for (offset, c) in haystack.char_indices() {
+        if c == needle {
+            return Some(offset);
+        }
+    }
+    None
+}
+
+fn main() {
+  let m = find("findstring", 'd');
+  println!("size: {}", m.and_then(|x| Some(x.to_string() + "test")).unwrap());
+}
 ```
 
-  6. `unwrap_or_else` 如果是None就回调function，否则就直接返回Option的值
+  6. `unwrap_or_else` 如果是None就回调function，这个function会返回一个值，否则就直接返回Option的值
+
+```rust
+fn main() {
+  let mut argv = env::args();
+  let arg: String = argv.nth(1).unwrap_or_else(|| "test".to_owned());
+  println!("arg: {}", arg);
+}
+```
 
   7. Result type alias idiom
 
@@ -610,6 +684,25 @@ type Result<T> = result::Result<T, ParseIntError>;
 fn double_number(number_str: &str) -> Result<i32> {
     unimplemented!();
 }
+
+fn double_number(number_str: &str) -> i32 {
+    2 * number_str.parse::<i32>().unwrap()
+}
+
+fn main() {
+    let n: i32 = double_number("10");
+    assert_eq!(n, 20);
+}
+
+// 通过map来转换
+fn double_number(number_str: &str) -> i32 {
+    2 * number_str.parse::<i32>().map(|number| number + 10).unwrap()
+}
+
+fn main() {
+    let n: i32 = double_number("10");
+    assert_eq!(n, 40);
+}
 ```
 
   8. `ok_or` 将Option转换为Result
@@ -621,9 +714,41 @@ fn ok_or<T, E>(option: Option<T>, err: E) -> Result<T, E> {
         None => Err(err),
     }
 }
+
+use std::env;
+
+fn double_arg(mut argv: env::Args) -> Result<i32, String> {
+    argv.nth(1)
+        .ok_or("Please give at least one argument".to_owned())
+        .and_then(|arg| arg.parse::<i32>().map_err(|err| err.to_string()))
+}
+
+fn main() {
+    match double_arg(env::args()) {
+        Ok(n) => println!("{}", n),
+        Err(err) => println!("Error: {}", err),
+    }
+}
 ```
 
   9. `map_err` Maps a `Result<T, E>` to `Result<T, F>`，如果是Ok就原封不动返回，否则就将error值传递给fucntion，返回另一种类型，最后将结果包装成Result
+
+```rust
+pub fn map_err<F, O>(self, op: O) -> Result<T, F>
+where
+    O: FnOnce(E) -> F,
+
+fn stringify(x: u32) -> String { format!("error code: {}", x) }
+
+fn main() {
+  let x: Result<u32, u32> = Ok(2);
+  assert_eq!(x.map_err(stringify), Ok(2));
+
+  let x: Result<u32, u32> = Err(13);
+  assert_eq!(x.map_err(stringify), Err("error code: 13".to_string()));
+}
+
+```
 
   10. `try!` or `?`
 
@@ -633,6 +758,44 @@ macro_rules! try {
         Ok(val) => val,
         Err(err) => return Err(err),
     });
+}
+
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+
+fn file_double<P: AsRef<Path>>(file_path: P) -> Result<i32, String> {
+    let mut file = File::open(file_path).map_err(|e| e.to_string())?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).map_err(|e| e.to_string())?;
+    let n = contents.trim().parse::<i32>().map_err(|e| e.to_string())?;
+    Ok(2 * n)
+}
+
+fn main() {
+    match file_double("foobar") {
+        Ok(n) => println!("{}", n),
+        Err(err) => println!("Error: {}", err),
+    }
+}
+
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+
+fn file_double<P: AsRef<Path>>(file_path: P) -> Result<i32, String> {
+    let mut file = try!(File::open(file_path).map_err(|e| e.to_string()));
+    let mut contents = String::new();
+    try!(file.read_to_string(&mut contents).map_err(|e| e.to_string()));
+    let n = try!(contents.trim().parse::<i32>().map_err(|e| e.to_string()));
+    Ok(2 * n)
+}
+
+fn main() {
+    match file_double("foobar") {
+        Ok(n) => println!("{}", n),
+        Err(err) => println!("Error: {}", err),
+    }
 }
 ```
 
@@ -650,7 +813,30 @@ trait Error: Debug + Display {
 }
 ```
 
-  12. `Box<Error>` 使用这个错误类型，而不是具体的类型，但是不能向下转型，没办法拿到进一步的错误信息
+  12. `Box<dyn Error>` 使用这个错误类型，而不是具体的类型，但是不能向下转型，没办法拿到进一步的错误信息
+
+```rust
+use std::error::Error;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+
+// 任何类型的Error都可以向上转型为Box<dyn Error>
+fn file_double<P: AsRef<Path>>(file_path: P) -> Result<i32, Box<dyn Error>> {
+    let mut file = File::open(file_path)?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    let n = contents.trim().parse::<i32>()?;
+    Ok(2 * n)
+}
+
+fn main() {
+  match file_double("foobar") {
+    Ok(n) => println!("{}", n),
+    Err(err) => println!("Error: {}", err),
+  }
+}
+```
 
   13. `expect`  如果是None就`panic!`，并输出一段自定义的错误消息。
 
@@ -677,6 +863,28 @@ assert_eq!(x.map_or(42, |v| v.len()), 3);
 
 let x: Option<&str> = None;
 assert_eq!(x.map_or(42, |v| v.len()), 42);
+```
+
+  17. `unwrap_err` 如果值是Ok则会panic，如果值是err则返回对应的Error值
+
+```rust
+pub fn unwrap_err(self) -> E
+
+Unwraps a result, yielding the content of an Err.
+
+Panics
+Panics if the value is an Ok, with a custom panic message provided by the Ok's value.
+
+use std::error::Error;
+use std::fs;
+use std::io;
+use std::num;
+
+fn main() {
+  let io_err: io::Error = io::Error::last_os_error();
+  let parse_err: num::ParseIntError = "2".parse::<i32>().unwrap_err();
+  println!("{}", parse_err);
+}
 ```
 
 * 内部可变性
@@ -743,7 +951,6 @@ match既可以操作引用也可以操作value
 struct Foo(String);
 
 fn main() {
-    let foo = &Foo(String::from("test"));
     // 匹配引用，因此并没有发生move
     match foo {
         Foo(x) => println!("Matched! {}", x),
@@ -981,6 +1188,8 @@ cargo build --features "my_feature_name"
 * DST(胖指针)的设计，避免了数据类型作为参数传递时自动退化为裸指针类型，丢失长度信息的问题，保证了类型安全。
 * enum中不能包含DST类型，struct中只有最后一个元素可以是DST，其他地方不行，如果包含有DST类型，那么这个结构体也就成了DST类型
 
+
+
 ## macro
 
 item、block、stmt、 pat、expr、ty、
@@ -1104,6 +1313,20 @@ fn main() {
     println!("mutable_box now contains {}", mutable_box);
 }
 ```
+
+
+
+## error handle
+
+
+
+
+## cargo
+
+`Dev-dependencies` are not used when compiling a package for building, but are used for compiling tests, examples, and benchmarks.
+
+[dev-dependencies]
+tempdir = "0.3"
 
 
 ## Link
