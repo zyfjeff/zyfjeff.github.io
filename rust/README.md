@@ -1,5 +1,8 @@
 ## 语法基础
 
+
+* rust中的数组是存放在栈上的，可以直接访问，不需要通过指针来计算。
+
 * Format格式化输出
 
 ```rust
@@ -1319,14 +1322,22 @@ fn main() {
 ## error handle
 
 
-
-
 ## cargo
 
 `Dev-dependencies` are not used when compiling a package for building, but are used for compiling tests, examples, and benchmarks.
 
 [dev-dependencies]
 tempdir = "0.3"
+
+
+
+
+
+## attribute
+
+This RFC introduces the #[non_exhaustive] attribute for enums and structs, which indicates that more variants/fields may be added to an enum/struct in the future.
+Adding this hint to enums will force downstream crates to add a wildcard arm to match statements, ensuring that adding new variants is not a breaking change.
+Adding this hint to structs or enum variants will prevent downstream crates from constructing or exhaustively matching, to ensure that adding new fields is not a breaking change.
 
 
 ## Link

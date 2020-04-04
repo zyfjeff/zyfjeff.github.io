@@ -1,50 +1,158 @@
-
-* 什么是虚假唤醒? 需要长期wait的系统调用为什么会被signal打断?
-
 * x86平台上，目前有两套固件标准，一个就是早期的BIOS、另外一个就是UEFI。
 * 为了避免让每一个操作系统实现bootloader，所以有了bootloader标准Multiboot，这个标准定义了bootloader和OS交互的接口，其参考实现就是grub。
-* [ReadZone](https://os.phil-opp.com/red-zone/)问题
 * 通过内存映射的方式访问，VGA (0xb8000)
 * `QEMU -serial` 可以将串口输出重定向到另外一个地方，例如: `-serial mon:stdio`、`-serial file:output-file.txt`
-* x86平台下，大概有20多种不通的CPU异常类型，最为重要的有以下几个:
-  1. `Page Fault` 页错误，页面还没有映射，或者往一个只读的页面写
-  2. `Invalid Opcode` 无效的指令，比如在一个不支持SSE指针的CPU上，执行了SSE指令
-  3. `General Protection Fault` 跨特权级访问
-  4. `Double Fault` `Page Fault`的handler中发生了异常，会触发这个中断
-  5. `Triple Fault` 同上
 
-* 中断描述符表结构
+## Red Zone问题
 
-```
-u16	Function Pointer [0:15]	The lower bits of the pointer to the handler function. 函数指针
-u16	GDT selector	Selector of a code segment in the global descriptor table. 段选择器，用来从全局段描述表中选择一个段
-u16	Options	(see below)
-u16	Function Pointer [16:31]	The middle bits of the pointer to the handler function.
-u32	Function Pointer [32:63]	The remaining bits of the pointer to the handler function.
-u32	Reserved
+Read Zone是System V ABI的一个优化，允许函数临时去使用栈帧下的128个字节，而不用去调整堆栈指针。
+这个红色区域（red zone）就是一个优化。因为这个区域不会被信号或者中断侵占，函数可以在不移动栈指针的情况下使用它存取一些临时数据——于是两个移动rsp的指令就被节省下来了。
+然而，标准只说了不会被信号和终端处理程序侵占，red zone还是会被接下来的函数调用使用的，这也是为什么大多数情况下都是叶子函数（不会再调用别的函数）使用这种优化。下面我举一个例子：
 
-Options:
-0-2	Interrupt Stack Table Index	0: Don't switch stacks, 1-7: Switch to the n-th stack in the Interrupt Stack Table when this handler is called.
-3-7	Reserved
-8	0: Interrupt Gate, 1: Trap Gate	If this bit is 0, interrupts are disabled when this handler is called.
-9-11	must be one
-12	must be zero
-13‑14	Descriptor Privilege Level (DPL)	The minimal privilege level required for calling this handler.
-15	Present
+![read-zone](../images/read-zone.svg)
+
+
+```C++
+long test2(long a, long b, long c)	/* 叶子函数 */ {
+	return a*b + c;
+}
+
+long test1(long a, long b) {
+	return test2(b, a, 3);
+}
+
+int main(int argc, char const *argv[]) {
+	return test1(1, 2);
+}
 ```
 
-每一种异常都有一个预先定义的IDT索引，例如invalid opcode exception在table中就有一个索引是6，page faule异常的索引是14，当一个异常发生，CPU大致会做如下事情:
-1. 将一些寄存器保存到堆栈上，包括指令指针，还有一个寄存器
-2. 从IDT中读取对应的条目
-3. 查看对应条目是否存在，不存在就抛double fault异常
-4. 如果条目中表明这是interrupt gate，那就关中断
-5. 通过GDT selector从全局描述符表中把Code Segment载入到段寄存器中
-6. 跳到指定的handler函数中执行
+对应的汇编如下:
 
-* 中断调用约定(The Interrupt Calling Convention)
-* 一些异常handler的组合会导致Double Fault
+```C++
+00000000004004d6 <test2>:
+  4004d6:	55                   	push   %rbp
+  4004d7:	48 89 e5             	mov    %rsp,%rbp
+  4004da:	48 89 7d f8          	mov    %rdi,-0x8(%rbp)  // 不需要调整栈顶，直接使用原来栈顶的底部128个字节
+  4004de:	48 89 75 f0          	mov    %rsi,-0x10(%rbp)
+  4004e2:	48 89 55 e8          	mov    %rdx,-0x18(%rbp)
+  4004e6:	48 8b 45 f8          	mov    -0x8(%rbp),%rax
+  4004ea:	48 0f af 45 f0       	imul   -0x10(%rbp),%rax
+  4004ef:	48 89 c2             	mov    %rax,%rdx
+  4004f2:	48 8b 45 e8          	mov    -0x18(%rbp),%rax
+  4004f6:	48 01 d0             	add    %rdx,%rax
+  4004f9:	5d                   	pop    %rbp
+  4004fa:	c3                   	retq
 
-* x86-64下，TSS包含了`Privilege Stack Table`、`Interrupt Stack Table`、`I/O Map Base Address`等
+00000000004004fb <test1>:
+  4004fb:	55                   	push   %rbp
+  4004fc:	48 89 e5             	mov    %rsp,%rbp
+  4004ff:	48 83 ec 10          	sub    $0x10,%rsp   // 调整栈顶
+  400503:	48 89 7d f8          	mov    %rdi,-0x8(%rbp)
+  400507:	48 89 75 f0          	mov    %rsi,-0x10(%rbp)
+  40050b:	48 8b 4d f8          	mov    -0x8(%rbp),%rcx
+  40050f:	48 8b 45 f0          	mov    -0x10(%rbp),%rax
+  400513:	ba 03 00 00 00       	mov    $0x3,%edx
+  400518:	48 89 ce             	mov    %rcx,%rsi
+  40051b:	48 89 c7             	mov    %rax,%rdi
+  40051e:	e8 b3 ff ff ff       	callq  4004d6 <test2>
+  400523:	c9                   	leaveq            // 恢复栈顶
+  400524:	c3                   	retq
+
+```
+
+可以看到test1移动了栈顶指针来获取栈帧空间，即`sub $xxx, %rsp + leaveq`的组合。但是test2并没有移动栈顶指针，
+而是直接使用ebp/esp（此时它们两个相等，由于是叶子也不用考虑内存对齐的问题）存放要使用的数据。
+
+
+这个优化对于异常和硬件中断则会产生巨大问题，一般内部都会关掉这个优化。
+
+![read-zone-override](../images/read-zone-overwrite.svg)
+* https://os.phil-opp.com/red-zone/
+
+
+## SIMD和OS
+
+SIMD(Single Instruction Multiple Data)，单条指令可以操作多个字节的数据。目前x86支持三种SIMD的标准:
+
+1. MMX  Multi Media Extension ，这个标准定义了8个64位的寄存器，分别是mm0、mm1、mm2....mm7
+2. SSE  Streaming SIMD Extensions，添加了十六个新的寄存器，分别是xmm0...xmm15，每一个寄存器都是128位
+3. AVX  Advanced Vector Extensions，新增了16个256位的寄存器 ymm0....ymm15
+
+SIMD指令虽然可以提高性能，但是对于OS来说会导致上下文切换的开销变大，每一次上下文切换或者硬件中断都需要进行上下文的保存和恢复
+因为使用了SIMD指令会导致每次需要保存的内容更多，带来性能的上的损耗。所以内核开发会关闭SIMD。但是目前x86_64架构一般都会使用
+SIMDl来实现浮点数的操作，如果关闭SIMD会导致错误。幸运的是LLVM给我们提供了soft-float能力，可以通过软件函数来模拟所有的浮点数操作。
+
+
+## Preserved and Sscratch Registers
+
+1. preserved registers
+
+这类寄存器在跨函数调用的时候必须不能被改变，因此被调用者需要一开始就保存这些寄存器，然后在调用结束的时候进行恢复
+
+rbp, rbx, rsp, r12, r13, r14, r15
+
+callee-saved  被调用者保存
+
+2. scratch registers
+
+这类寄存器属于临时寄存器，被调用者在使用上是没有限制的，调用者如果向保持这些寄存器的值不变就需要保存这些寄存器。
+所以这类寄存器被称为调用者保存
+
+rax, rcx, rdx, rsi, rdi, r8, r9, r10, r11
+
+caller-saved  调用者保存
+
+
+## Interrupt Calling Convention and Interrupt Stack Frame
+
+1. Interrupt Calling Convention
+
+中断调用和函数调用很类似，都有自己的调用规范，因为异常可以发生在任何地方，因此我们没办法提前保存需要的寄存器，因此
+中断调用的时候需要保存所有的寄存器。中断调用结束后恢复所有保存的寄存器。为了效率，并不会保存所有的寄存器，而这是保存
+被函数覆盖的寄存器。
+
+2. Interrupt Stack Frame
+
+  1. Aligning the stack pointer
+  2. Switching stacks
+  3. Pushing the old stack pointer
+  4. ushing and updating the RFLAGS register
+  5. Pushing the instruction pointer
+  6. Pushing an error code
+  7. Invoking the interrupt handler
+
+## VGA Buffer
+
+
+## IST and TSS
+
+The Interrupt Stack Table (IST) is part of an old legacy structure called Task State Segment (TSS).
+The TSS used to hold various information (e.g. processor register state) about a task in 32-bit mode
+and was for example used for hardware context switching. However, hardware context switching is no longer
+supported in 64-bit mode and the format of the TSS changed completely.
+
+On x86_64, the TSS no longer holds any task specific information at all. Instead,
+it holds two stack tables (the IST is one of them). The only common field between the 32-bit and 64-bit TSS is the pointer to the I/O port permissions bitmap.
+
+The Privilege Stack Table is used by the CPU when the privilege level changes. For example,
+if an exception occurs while the CPU is in user mode (privilege level 3), the CPU normally switches to kernel mode (privilege level 0)
+before invoking the exception handler. In that case, the CPU would switch to the 0th stack in the Privilege
+Stack Table (since 0 is the target privilege level). We don't have any user mode programs yet, so we ignore this table for now.
+
+## The Interrupt Descriptor Table
+
+In order to catch and handle exceptions, we have to set up a so-called Interrupt Descriptor Table (IDT).
+In this table we can specify a handler function for each CPU exception. The hardware uses this table directly,
+
+## The Global Descriptor Table
+
+The Global Descriptor Table (GDT) is a relict that was used for memory segmentation before paging became the de facto standard.
+It is still needed in 64-bit mode for various things such as kernel/user mode configuration or TSS loading.
+
+The GDT is a structure that contains the segments of the program. It was used on older architectures to isolate programs from each other,
+before paging became the standard. For more information about segmentation check out the equally named chapter of the free “Three Easy Pieces” book.
+While segmentation is no longer supported in 64-bit mode, the GDT still exists. It is mostly used for two things: Switching between kernel space and user space,
+and loading a TSS structure.
 
 
 ## OS基础
@@ -182,8 +290,6 @@ Idx Name          Size      VMA       LMA       File off  Algn
 ## 如何获取调用链?
 
 
-
-
 ## 网络基础
 
 1. ARP和GARP
@@ -193,7 +299,6 @@ ARP协议工作在二层，用于获取IP地址对应的mac地址，报文的格
 
   * 用来探测IP冲突的问题，如果真的有人响应这个报文，说明局域网中有和自己相同IP的机器存在
   * 用来更新自己的Mac地址信息，当自己的Mac地址发生变化的时候，可以通过这种报文主动通知网络中的其他主机更新自己的ARP缓存
-
 
 
 

@@ -25,6 +25,8 @@ wget "https://download.docker.com/linux/centos/docker-ce.repo" -O /etc/yum.repos
 yum install container-selinux -b current -y
 yum install docker-ce -y
 
+> http://ftp.riken.jp/Linux/cern/centos/7/extras/x86_64/Packages/ 可能要更新selinux的版本
+
 # service section
 # vim /usr/lib/systemd/system/docker.service
 # ExecStartPost=/usr/sbin/iptables -P FORWARD ACCEPT
@@ -62,6 +64,7 @@ echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
 kubeadm init --kubernetes-version=v1.13.2 --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/12 --apiserver-advertise-address=0.0.0.0 --ignore-preflight-errors=Swap
 
 
+# 节点加入
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config

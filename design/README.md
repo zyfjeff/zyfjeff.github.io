@@ -99,6 +99,216 @@ class PersonA {
 其他的模块可以通过`set_update_name_callback`来设置callback进行回调，进而来进行解耦。
 
 
+
+## Strategized Locking
+
+基于Strategy Pattern来实现，这个模式的特点在于，定义了一组实现，将每一个实现都封装起来，并且使他们之间可以相互转换
+
+
+运行时多态
+
+```cpp
+
+// Strategy接口，会有多种实现
+class Lock {
+ public:
+  virtual void lock() const = 0;
+  virtual void unlock() const = 0;
+};
+
+// Context类，负责组装Strategy
+class StrategizedLocking {
+  public:
+    StrategizedLocking(Lock& l) : lock_(l) {
+      lock.lock();
+    }
+
+    ~StrategizedLocking() {
+      lock.unlock();
+    }
+  private:
+    Lock& lock_;
+}
+
+struct NullObjectMutex {
+  void lock() {}
+  void unlock() {}
+};
+
+class NoLock : public lock {
+  mutable NullObjectMutex mutex_;
+};
+
+class ExclusiveLock : public lock {
+  mutable std::mutex mutex_;
+}
+
+class SharedLock : public Lock {
+  mutable std::shared_mutex shared_mutex_;
+}
+```
+
+编译时多态
+
+```cpp
+template <typename LOCK>
+class StrategizedLocking {
+  public:
+    StrategizedLocking(LOCK& l) : lock(l) {
+      lock.lock();
+    }
+
+    ~StrategizedLocking() {
+      lock.unlock();
+    }
+  private:
+    LOCK& lock;
+}
+```
+
+还有一种方式就是提供`_unlock`后缀的方法。
+
+
+
+## Active Object
+Active Object 设计模式的本质是解耦合方法的调用 (Method invocation) 与方法的执行 (Method execution)，方法调用发生在调用者线程上下文中，而方法的执行发生在独立于调用者线程的 Active Object 线程上下文中。并且重要的一点是，该方法与其它普通的对象成员方法对于调用者来说，没有什么特别的不同。从运行时的角度来看，这里涉及到两类线程，一个是调用者线程，另外一个是 Active Object 线程
+
+```cpp
+#include <algorithm>
+#include <deque>
+#include <functional>
+#include <future>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <numeric>
+#include <random>
+#include <thread>
+#include <utility>
+#include <vector>
+
+class IsPrime {
+ public:
+  std::pair<bool, int> operator()(int i) {
+    for(int j = 2; j * j <= i; ++j) {
+      if (i % j == 0) return std::make_pair(false, i);
+    }
+    return std::make_pair(true, i);
+  }
+};
+
+class ActiveObject {
+ public:
+   std::future<std::pair<bool, int>> enqueueTask(int i) {
+      IsPrime isPrime;
+      std::packaged_task<std::pair<bool, int>(int)> newJob(isPrime);
+
+      auto isPrimeFuture = newJob.get_future();
+      auto pair = std::make_pair(std::move(newJob), i);
+
+      {
+        std::lock_guard<std::mutex> lockGuard(activationListMutex);
+        activationList.push_back(std::move(pair));
+      }
+
+      return isPrimeFuture;
+   }
+
+   void run() {
+    std::thread servant([this] {
+      while(!isEmpty()) {
+        auto myTask = dequeueTask();
+        myTask.first(myTask.second);
+      }
+    });
+    servant.join();
+   }
+
+ private:
+
+   std::pair<std::packaged_task<std::pair<bool, int>(int)>, int> dequeueTask() {
+    std::lock_guard<std::mutex> lockGuard(activationListMutex);
+    auto myTask = std::move(activationList.front());
+    activationList.pop_front();
+    return myTask;
+   }
+
+   bool isEmpty() {
+    std::lock_guard<std::mutex> lockGuard(activationListMutex);
+    auto empty = activationList.empty();
+    return empty;
+   }
+
+   std::deque<std::pair<std::packaged_task<std::pair<bool, int>(int)>, int>> activationList;
+   std::mutex activationListMutex;
+};
+
+std::vector<int> getRandNumbers(int number) {
+  std::vector<int> numbers;
+  for(long long i = 0; i < number; ++i) numbers.push_back(i);
+
+  return numbers;
+}
+
+
+std::future<std::vector<std::future<std::pair<bool, int>>>> getFutures(ActiveObject& activeObject, int numberPrimes) {
+  return std::async([&activeObject, numberPrimes] {
+    std::vector<std::future<std::pair<bool, int>>> futures;
+    auto randNumbers = getRandNumbers(numberPrimes);
+    for(auto numb : randNumbers) {
+      futures.push_back(activeObject.enqueueTask(numb));
+    }
+    return futures;
+  });
+}
+
+int main() {
+  std::cout << "starting........" << std::endl;
+  ActiveObject activeObject;
+
+  auto client1 = getFutures(activeObject, 1998);
+  auto client2 = getFutures(activeObject, 2003);
+  auto client3 = getFutures(activeObject, 2011);
+  auto client4 = getFutures(activeObject, 2014);
+  auto client5 = getFutures(activeObject, 2017);
+
+  auto futures = client1.get();
+  auto futures2 = client2.get();
+  auto futures3 = client3.get();
+  auto futures4 = client4.get();
+  auto futures5 = client5.get();
+
+  futures.insert(futures.end(), std::make_move_iterator(futures2.begin()), std::make_move_iterator(futures2.end()));
+  futures.insert(futures.end(), std::make_move_iterator(futures3.begin()), std::make_move_iterator(futures3.end()));
+  futures.insert(futures.end(), std::make_move_iterator(futures4.begin()), std::make_move_iterator(futures4.end()));
+  futures.insert(futures.end(), std::make_move_iterator(futures5.begin()), std::make_move_iterator(futures5.end()));
+
+  activeObject.run();
+  std::vector<std::pair<bool, int>> futResults;
+  futResults.reserve(futures.size());
+
+  for(auto& fut : futures) futResults.push_back(fut.get());
+  std::sort(futResults.begin(), futResults.end());
+
+  auto prIt = std::find_if(futResults.begin(), futResults.end(), [](std::pair<bool, int> pa) { return pa.first == true; });
+
+  std::cout << "Number primes: " << std::distance(prIt, futResults.end()) << std::endl;
+  std::cout << "Primes: " << std::endl;
+
+  std::for_each(prIt, futResults.end(), [](auto p) { std::cout << p.second << " ";});
+
+  std::cout << "\n\n";
+
+  std::cout << "Number on primes: " << std::distance(futResults.begin(), prIt) << std::endl;
+  std::cout << "No primes: " << std::endl;
+
+  std::for_each(futResults.begin(), prIt, [](auto p) { std::cout << p.second << " ";});
+
+  std::cout << std::endl;
+  return 0;
+}
+```
+
 ## API设计
 
 * 永远不要返回私有数据成员的非const指针或引用，这会破坏封装性。

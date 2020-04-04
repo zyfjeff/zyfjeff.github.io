@@ -1,5 +1,6 @@
 ## epoll
 
-1. 鲸群问题
-2. 唤醒顺序问题
-3. epoll fd嵌套
+
+
+https://blog.csdn.net/dog250/article/details/80837278
+https://blog.csdn.net/dog250/article/details/6612496

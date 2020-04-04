@@ -81,3 +81,10 @@ pants
 shorts
 pyjamas
 glasses
+
+* 名词的可数和不可数
+不可以数的、不可以计算的名词
+
+1. 液体状的 water\tea\coffee\milk\beer...
+2. 物质名词: soap\air\chocolate\rice
+3. 抽象名词: love/friendship\enthusiasm

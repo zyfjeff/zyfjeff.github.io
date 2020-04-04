@@ -264,7 +264,6 @@ auto&& [a, b, c, ...] = expression
 ```
 
 
-
 ## Template argument deduction for class templates
 
 自动推到类模版的参数、不用显示的指定模版类型
@@ -522,4 +521,15 @@ int&& z = 0;
 auto z1 = std::move(z); // int
 decltype(auto) z2 = std::move(z); // int&&
 
+```
+
+
+## inline static data members
+
+Since C++17, static data members can be declared inline. An inline static data member can be defined and initialised in the class definition.
+
+```cpp
+struct X {
+  inline static int n = 1;
+}
 ```

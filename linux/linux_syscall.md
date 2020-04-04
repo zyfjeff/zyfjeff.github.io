@@ -123,6 +123,77 @@ reference:
 
 ## memfd_create
 
+创建一个匿名文件，这个文件的行为和一个普通文件一样，但是和普通文件不同的是，这个文件是存放在内存中的
+当所有引用丢失的时候会自动释放。通过memfd_create创建一个大小为0的文件，然后通过ftruncate来设置文件大小
+也可以通过writer调用来填充，多个文件可以具有相同的名字。这个syscall的目的是为了限制fd的可用操作来避免发生一些race condition。
+一般需要结合mmap来使用，等用与在tmpfs中打开一个文件。
+
+```
+   File sealing
+       In the absence of file sealing, processes that communicate via shared
+       memory must either trust each other, or take measures to deal with
+       the possibility that an untrusted peer may manipulate the shared
+       memory region in problematic ways.  For example, an untrusted peer
+       might modify the contents of the shared memory at any time, or shrink
+       the shared memory region.  The former possibility leaves the local
+       process vulnerable to time-of-check-to-time-of-use race conditions
+       (typically dealt with by copying data from the shared memory region
+       before checking and using it).  The latter possibility leaves the
+       local process vulnerable to SIGBUS signals when an attempt is made to
+       access a now-nonexistent location in the shared memory region.
+       (Dealing with this possibility necessitates the use of a handler for
+       the SIGBUS signal.)
+
+       Dealing with untrusted peers imposes extra complexity on code that
+       employs shared memory.  Memory sealing enables that extra complexity
+       to be eliminated, by allowing a process to operate secure in the
+       knowledge that its peer can't modify the shared memory in an
+       undesired fashion.
+```
+
+通过memfd_create就可以实现File sealing来避免对untrusted的操作进行处理。可以直接限制允许的操作。
 
 reference:
 1. [man pages](http://www.man7.org/linux/man-pages/man2/memfd_create.2.html)
+
+
+## SOCK_SEQPACKET
+
+* SOCK_STREAM TCP Socket类型
+* SOCK_DGRAM UDP Scoket类型
+* SOCK_SEQPACKET 兼具了 SOCK_STREAM的可靠、顺序、双向通信的特点，又具备了SOCK_DGRAM传输完整包的特点。传输的包具有完整的边界、不会拆包。
+
+
+## TIOCSTI
+
+可以往指定的终端的输入缓冲区放置相关的字符
+
+
+```
+#include <stdio.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <string.h>
+
+int main(int argc, char **argv)
+{
+  char tty[16] = {0};
+  char cmd[64] = {0};
+  char tmp[2] = {0};
+  int len, i;
+  int fd;
+
+  strncpy(tty, argv[1], strlen(argv[1]));
+  strncpy(cmd, argv[2], strlen(argv[2]));
+  len = strlen(cmd);
+  fd = open(tty, O_RDWR);
+
+  for (i = 0; i < len; i++) {
+    sprintf(tmp, "%c ", cmd[i]);
+    ioctl(fd, TIOCSTI, tmp);
+  }
+  ioctl(fd, TIOCSTI, "\n ");
+}
+```

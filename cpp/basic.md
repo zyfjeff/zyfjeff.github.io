@@ -1,5 +1,16 @@
 # C++基础
 
+
+## 为什么make_shared无法自定义删除器
+
+## unique_ptr为什么不能和shared_ptr一样不把删除器保存在模版参数中
+
+## shared_ptr自定义的删除器保存在哪，为什么可以不用放在模版参数中
+
+## Dependent base
+
+https://gcc.gnu.org/wiki/VerboseDiagnostics#dependent_base
+
 ## Literal Type
 
 C++ core language对其进行了定义，一个LiteralType类型满足下面的要求:
@@ -59,6 +70,40 @@ T () ;
 T t = {} ;
 T {} ;
 ```
+
+## `std::move_iterator`
+
+```cpp
+#include <iostream>
+#include <algorithm>
+#include <vector>
+#include <iterator>
+#include <numeric>
+#include <string>
+
+int main()
+{
+    std::vector<std::string> v{"this", "is", "an", "example"};
+
+    std::cout << "Old contents of the vector: ";
+    for (auto& s : v)
+        std::cout << '"' << s << "\" ";
+
+    typedef std::vector<std::string>::iterator iter_t;
+    std::string concat = std::accumulate(
+                             std::move_iterator<iter_t>(v.begin()),
+                             std::move_iterator<iter_t>(v.end()),
+                             std::string());  // Can be simplified with std::make_move_iterator
+
+    std::cout << "\nConcatenated as string: " << concat << '\n'
+              << "New contents of the vector: ";
+    for (auto& s : v)
+        std::cout << '"' << s << "\" ";
+    std::cout << '\n';
+}
+```
+
+还可以借助`std::make_move_iterator`，可以不用显示给出iterator类型
 
 ## 使用duration_cast使得时间转化的代码可读性更高
 
@@ -578,6 +623,30 @@ struct crtp {
 ```
 
 
+## 委托模式(Delegate)
+
+```C++
+class Consumer {
+  public:
+    class Delegate {
+      public:
+        virtual ~Delegate() {}
+        virtual void Unregister(Consumer* consumer) PURE;
+    };
+  Consumer(Delegate *delegate);
+  DoUnregister() {
+    if (delegate_) {
+      delegate_->Unregister();
+    }
+  }
+  private:
+    Delegate* delegate_;
+}
+```
+
+相当于Consumer将部分能力通过Delegate的方式提供出去，让别的组件来实现，然后自己委托来调用。这个实现存在的问题就是
+Delagate的生命周期并不是由Consumer来保证的，如何确保在调用的时候，Delegate是存活的?
+
 ## Mock技巧
 
 1. Mock `ClassA::Create()`
@@ -660,3 +729,11 @@ private:
 ## 线程/进程模型总结
 
 ## 网络模型总结
+
+
+
+## 常用链接
+
+1. https://godbolt.org/
+2. https://preshing.com/
+3.

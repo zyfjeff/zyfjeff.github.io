@@ -31,7 +31,7 @@
    ```cpp
    #define TCP_PAWS_WINDOW 1
    #define TCP_PAWS_MSL    60
-   
+
    if (tmp_opt.saw_tstamp &&
        tcp_death_row.sysctl_tw_recycle &&
        (dst = inet_csk_route_req(sk, &fl4, req, want_cookie)) != NULL &&

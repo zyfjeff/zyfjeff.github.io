@@ -458,6 +458,87 @@ Network level filters can also share state (static and dynamic) among themselves
 2. 前缀匹配、或者是精确匹配(大小写敏感或者不敏感都可以)，目前还不支持基于正则的匹配。
 3. TLS redirection
 4. Direct Response
+5. 显示的host重写
+6. 自动根据选择的upstream的DNS name进行host重写
+7. 前缀重写
+8. 基于正则表达式捕获组的方式进行path重写
+9. 请求重试(基于配置和http header两种方式)
+10. 请求超时控制(基于配置和http header两种方式)
+11. Request hedging
+12. Traffic shifting
+13. Traffic splitting
+14. 任何的header match
+15. 可以指定虚拟集群
+16. 基于优先级的路由
+17. 基于hash policy的路由
+18. 基于绝对url的代理转发
+
+
+* Route Scope
+
+For example, for the following scoped route configuration, Envoy will look into the “addr” header value, split the header value by “;” first,
+and use the first value for key ‘x-foo-key’ as the scope key. If the “addr” header value is “foo=1;x-foo-key=127.0.0.1;x-bar-key=1.1.1.1”, then “127.0.0.1”
+will be computed as the scope key to look up for corresponding route configuration.
+
+```
+HttpConnectionManager config:
+scoped_routes:
+  name: foo-scoped-routes
+  scope_key_builder:
+    fragments:
+      - header_value_extractor:
+          name: X-Route-Selector
+          element_separator: ,
+          element:
+            separator: =
+            key: vip
+
+
+scoped_route_configurations_list/SRDS:
+ (1)
+ name: route-scope1
+ route_configuration_name: route-config1
+ key:
+    fragments:
+      - string_key: 172.10.10.20
+
+(2)
+ name: route-scope2
+ route_configuration_name: route-config2
+ key:
+   fragments:
+     - string_key: 172.20.20.30
+
+GET / HTTP/1.1
+Host: foo.com
+X-Route-Selector: vip=172.10.10.20
+
+最终匹配到route-config1
+```
+
+根据`scoped_routes`获取请求中的指定字段，然后切割获取到对应的value，然后拿着value和定义的`scoped_route_configurations`知道要使用的路由配置名称
+
+
+* 重试语义
+
+```yaml
+{
+  "retry_on": "...",
+  "num_retries": "{...}",
+  "per_try_timeout": "{...}",
+  "retry_priority": "{...}",
+  "retry_host_predicate": [],
+  "host_selection_retry_max_attempts": "...",
+  "retriable_status_codes": [],
+  "retry_back_off": "{...}",
+  "retriable_headers": [],
+  "retriable_request_headers": []
+}
+```
+
+可以配置重试的最大次数、重试的条件(可以是基于reseponse code、可以是网络等等)，Request budgets可以防止大量的请求重试、可以进行host selection rerty
+
+
 
 ```cpp
 message DirectResponseAction {
@@ -550,7 +631,9 @@ virtual_hosts:
            cluster: helloworld_v2
 ```
 
+
 ## Connection pooling
+
 HTTP/1.1 连接池，同步的，一个请求绑定一个连接，这个连接处理完这个请求，才会变成可用状态，才能处理下一个请求，单个downstream断链只能导致一个请求出问题。
 HTTP2/2 一个upstream host只会建立一条连接，上游所有的请求都会通过整条连接发送到upstream的主机，如果收到GOAWAY frame或者到达最大流限制，那么连接池
 会重新创建一个新的连接，然后drain掉正在服务的连接。
@@ -597,6 +680,9 @@ response_nonce:
 > 如果拒绝了DiscoveryResponse则返回的response_nonce对应DiscoveryResponse中的nonce，version_info则对应上一次DiscoveryResponse中的version_info
 > 同一时间有多个DiscoveryRequest的时候，mangement server只会影响最后的一个DiscoverRequest
 > 如果管理server返回的response_nonce是一个新的值，Envoy会拒绝这次请求
+
+
+If Envoy had instead rejected configuration update X, it would reply with error_detail populated and its previous version, which in this case was the empty initial version. The error_detail has more details around the exact error message populated in the message field:
 
 LDS/CDS的resource_names一般为空，表示获取所有的cluster和listener资源，而EDS和RDS一般会带上resource name获取感兴趣的资源，这个resource name来自于LDS和CDS。
 如果一个EDS没有对应的CDS，那么这个EDS是无效的，Envoy会忽略这个EDS。
@@ -846,16 +932,10 @@ ClusterManager 管理连接池和load balancing，在多个work线程共享这�
 
 ## EDS更新机制
 
-增量实现过程分析:
-1. 遍历要更新的hosts，更新locality weight map
-2. 更新all_hosts
-3. 遍历更新的hosts，针对每一个优先级调用对应优先级所对应的hostset的dealUpdate
-
-
 
 重要函数分析:
 
-* `HostSetImpl::updateHosts`
+* `HostSetImpl::updateHosts`(针对单个hostset进行全量更新)
 
 1. 更新过载因子
 2. 更新hosts_、healthy_hosts、degraded_hosts、exluded_hosts、hosts_per_locality_等等
@@ -864,7 +944,7 @@ ClusterManager 管理连接池和load balancing，在多个work线程共享这�
 5. rebuildLocalityScheduler 构建degraded的degraded_loality_scheduler
 6. 回调PriorityUpdateCb，对更新后的信息进行统计
 
-* `PrioritySetImpl::updateHosts`
+* `PrioritySetImpl::updateHosts` (包含多个优先级，每一个优先级一个hostset，可以单独更新某一个优先级)
 
 参数解析:
 
@@ -874,6 +954,8 @@ ClusterManager 管理连接池和load balancing，在多个work线程共享这�
 4. `const HostVector& hosts_added`                                      // 要添加的hosts
 5. `const HostVector& hosts_removed`                                    // 要移除的hosts
 6. `absl::optional<uint32_t> overprovisioning_factor = absl::nullopt`   // 是否更新过载因子，不需要的话就
+
+间接的调用了HostSetImpl::updateHosts，其中update_hosts_params包含了构造一个hostset所需要的全部信息
 
 
 ```cpp
@@ -898,6 +980,9 @@ void PrioritySetImpl::updateHosts(uint32_t priority, UpdateHostsParams&& update_
 3. 是否是batch_update，如果不是就再调用`runUpdateCallbacks`，使用者可以注册进行回调
 
 > 通过BatchUpdateScope进行update的，就是batch_update，是通过一个PriorityStateManagle来进行一次性更新的。
+
+* runUpdateCallbacks 只在HostSet中的主机完整的添加和删除才会触发，这里面的callback是通过addMemberUpdateCb来添加的
+* runReferenceUpdateCallbacks 是在HostSet中的主机进行局部的添加和删除才会触发，这里面的callback是通过addPriorityUpdateCb来添加的
 
 
 * `PrioritySetImpl::BatchUpdateScope::updateHosts`
@@ -953,7 +1038,10 @@ void PrioritySetImpl::BatchUpdateScope::updateHosts(
 6. 遍历所有的`PriorityState`
 7. 从`PriorityState`中取出每一个优先级内hosts进行`updateHostsPerLocality`
 
+
+
 * `PriorityStateManager::updateClusterPrioritySet`
+通过updateDynamicHostList拿到指定优先级下更新后的hosts列表、hosts_add、host_remove还等进行最终的更新
 
 参数解析:
 
@@ -1008,10 +1096,61 @@ void PrioritySetImpl::BatchUpdateScope::updateHosts(
 2. `HostVector& current_priority_hosts`                               // 当前优先级下存在的hosts
 3. `HostVector& hosts_added_to_current_priority`                      // 更新后，添加到当前优先级的机器
 4. `HostVector& hosts_removed_from_current_priority`                  // 更新后，从当前优先级移除的机器
-5. `HostMap& updated_hosts`                                           //
+5. `HostMap& updated_hosts`                                           // 用来过滤重复的hosts，保存已经更新过的hosts，最终替换all_hosts_
 6. `const HostMap& all_hosts`                                         // 当前集群存在的所有主机
 
+
+
+* `PrioritySetImpl::batchHostUpdate`
+
+```C++
+void PrioritySetImpl::batchHostUpdate(BatchUpdateCb& callback) {
+  BatchUpdateScope scope(*this);
+
+  // We wrap the update call with a lambda that tracks all the hosts that have been added/removed.
+  callback.batchUpdate(scope);
+
+  // Now that all the updates have been complete, we can compute the diff.
+  HostVector net_hosts_added = filterHosts(scope.all_hosts_added_, scope.all_hosts_removed_);
+  HostVector net_hosts_removed = filterHosts(scope.all_hosts_removed_, scope.all_hosts_added_);
+
+  runUpdateCallbacks(net_hosts_added, net_hosts_removed);
+}
+```
+
+调用`BatchUpdateCb`完成hosts的更新，得到所有增加的host和移除的host然后回调update callback即可
+
+
 基本过程分析:
+
+1. xDS接收到EDS配置，回调 `EdsClusterImpl::onConfigUpdate`
+2. 构建`BatchUpdateHelper`，传递给`PrioritySet::batchHostUpdate`进行批量更新，更新当前EDS的PrioritySet
+
+```cpp
+void EdsClusterImpl::onConfigUpdate(const Protobuf::RepeatedPtrField<ProtobufWkt::Any>& resources,
+                                    const std::string&) {
+  ....
+  // BatchUpdateHelper实现了PrioritySet::BatchUpdateCb
+  BatchUpdateHelper helper(*this, cluster_load_assignment);
+  // batchHostUpdate内部会调用helper->batchUpdate
+  priority_set_.batchHostUpdate(helper);
+}
+```
+3. `PrioritySet::batchHostUpdate`内部调用`batchUpdate`进行更新
+
+4. 调用`EdsClusterImpl::BatchUpdateHelper::batchUpdate`
+  4.1 构建`PriorityStateManager`
+  4.2 通过PriorityStateManager构建PriorityState，也就是hosts集合和LocalityWieghtMap
+  4.3 遍历新配置中的所有优先级调用`EdsClusterImpl::updateHostsPerLocality`更新对应优先级的HostSetImpl
+  4.4 遍历所有当前配置中存在的优先级调用`EdsClusterImpl::updateHostsPerLocality`更新对应优先级的HostSetImpl(其实就是删除，因为新配置中没有这个优先级的任何host)
+  4.5 更新EdsClusterImpl中存在的all_host_列表
+  4.6 完成配置批量更新，初始化完成
+
+
+通过上面的过程可以看出，核心的方法就是`EdsClusterImpl::updateHostsPerLocality`，针对单个优先级的更新。
+
+
+
 1. 遍历所有要增加的新hosts，也就是new_hosts
 2. 判断updated_hosts中是否已经存在，避免重复，达到去重的效果
 3. 从all_hosts中查找是否是已经存在的host
@@ -1892,12 +2031,169 @@ SymbolVec SymbolTableImpl::Encoding::decodeSymbols(const SymbolTable::Storage ar
 
 ## Grpc & xDS
 
-`Grpc::AsyncStreamCallbacks` 提供了`onReceiveMessage`的回调，通过`Grpc::AsyncStream`发出message后，通过这个callback获得返回的消息
+从最上层开始分析(以cds为例):
 
-`Grpc::AsyncClient` grpc Client 来创建一个`Grpc::AsyncStream`
+1. cds_api创建订阅器
+
+```C++
+class CdsApiImpl : public CdsApi,
+                   Config::SubscriptionCallbacks,
+                   Logger::Loggable<Logger::Id::upstream> {
+
+ private:
+  std::unique_ptr<Config::Subscription> subscription_;
+}
+
+CdsApiImpl::CdsApiImpl(const envoy::config::core::v3alpha::ConfigSource& cds_config,
+                       ClusterManager& cm, Stats::Scope& scope,
+                       ProtobufMessage::ValidationVisitor& validation_visitor)
+    : cm_(cm), scope_(scope.createScope("cluster_manager.cds.")),
+      validation_visitor_(validation_visitor) {
+  // 通过SubscriptionFactory来创建的
+  subscription_ = cm_.subscriptionFactory().subscriptionFromConfigSource(
+      cds_config, loadTypeUrl(cds_config.resource_api_version()), *scope_, *this);
+}
+```
+
+
+返回的是一个`Subscription`，CDS可以通过这个接口设置和更新要订阅的资源名
+
+```C++
+class Subscription {
+public:
+  virtual ~Subscription() = default;
+
+  /**
+   * Start a configuration subscription asynchronously. This should be called once and will continue
+   * to fetch throughout the lifetime of the Subscription object.
+   * @param resources set of resource names to fetch.
+   */
+  virtual void start(const std::set<std::string>& resource_names) PURE;
+
+  /**
+   * Update the resources to fetch.
+   * @param resources vector of resource names to fetch. It's a (not unordered_)set so that it can
+   * be passed to std::set_difference, which must be given sorted collections.
+   */
+  virtual void updateResourceInterest(const std::set<std::string>& update_to_these_names) PURE;
+};
+```
+
+实际上是创建了`GrpcMuxSubscriptionImpl`，并将`CdsApiImpl`传给`GrpcMuxSubscriptionImpl`通过`SubscriptionCallbacks`将订阅到的内容回调给`CdsApiImpl`
+
+```C++
+  case envoy::config::core::v3alpha::ConfigSource::ConfigSourceSpecifierCase::kAds: {
+    if (cm_.adsMux()->isDelta()) {
+      result = std::make_unique<DeltaSubscriptionImpl>(
+          cm_.adsMux(), type_url, callbacks, stats,
+          Utility::configSourceInitialFetchTimeout(config), true);
+    } else {
+      result = std::make_unique<GrpcMuxSubscriptionImpl>(
+          cm_.adsMux(), callbacks, stats, type_url, dispatcher_,
+          Utility::configSourceInitialFetchTimeout(config));
+    }
+    break;
+  }
+```
+
+SubscriptionCallbacks继承了`SubscriptionCallbacks`和`Subscription`
+
+```C++
+
+class GrpcMuxSubscriptionImpl : public Subscription,
+                                GrpcMuxCallbacks,
+                                Logger::Loggable<Logger::Id::config> {
+  private:
+    GrpcMuxSharedPtr grpc_mux_;
+    SubscriptionCallbacks& callbacks_;
+    GrpcMuxWatchPtr watch_{};
+}
+```
+
+GrpcMuxCallbacks本质上和SubscriptionCallbacks是一样的，`GrpcMuxSubscriptionImpl`通过底层的`GrpcMuxSharedPtr`(它会回调GrpcMuxCallbacks把收到的内容返回给GrpcMuxSubscriptionImpl)
+GrpcMuxSubscriptionImpl再调用`SubscriptionCallbacks`把收到的内容透传给上层的CDS API。
+
+```C++
+void GrpcMuxSubscriptionImpl::onConfigUpdate(
+    const Protobuf::RepeatedPtrField<ProtobufWkt::Any>& resources,
+    const std::string& version_info) {
+  .......
+  callbacks_.onConfigUpdate(resources, version_info);
+  .......
+}
+```
+
+接下来看下这个`GrpcMuxWatchPtr watch_{};`，它是通过`grpc_mux_`创建的。可以通过`GrpcMuxWatch`来取消订阅。
+
+```C++
+
+watch_ = grpc_mux_->subscribe(type_url_, resources, *this);
+
+/**
+ * Handle on an muxed gRPC subscription. The subscription is canceled on destruction.
+ */
+class GrpcMuxWatch {
+public:
+  virtual ~GrpcMuxWatch() = default;
+};
+```
+
+最后就剩下最为核心的`grpc_mux_`了，它是通过`cm_.adsMux()`创建出来的。是ClusterManagerImpl的成员，看起来是所有上层的xDS订阅是复用同一个`GrpcMuxSharedPtr`了
+
+
+```C++
+class ClusterManagerImpl : public ClusterManager, Logger::Loggable<Logger::Id::upstream> {
+  public:
+    Config::GrpcMuxSharedPtr adsMux() override { return ads_mux_; }
+  private:
+    Config::GrpcMuxSharedPtr ads_mux_;
+}
+
+      ads_mux_ = std::make_shared<Config::GrpcMuxImpl>(
+          local_info,
+          Config::Utility::factoryForGrpcApiConfigSource(*async_client_manager_,
+                                                         dyn_resources.ads_config(), stats)
+              ->create(),
+          main_thread_dispatcher,
+          *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
+              dyn_resources.ads_config().transport_api_version() ==
+                      envoy::config::core::v3alpha::ApiVersion::V3ALPHA
+                  ? "envoy.service.discovery.v3alpha.AggregatedDiscoveryService."
+                    "StreamAggregatedResources"
+                  : "envoy.service.discovery.v2.AggregatedDiscoveryService."
+                    "StreamAggregatedResources"),
+          random_, stats_,
+          Envoy::Config::Utility::parseRateLimitSettings(dyn_resources.ads_config()),
+          bootstrap.dynamic_resources().ads_config().set_node_on_first_message_only());
+```
+
+其实现包含了多个，可能是增量实现NewGrpcMuxImpl、也有可能是全量实现GrpcMuxImpl、或者是空实现NullGrpcMuxImpl，我们主要看下`GrpcMuxImpl`的实现
+
+```C++
+class GrpcMuxImpl
+    : public GrpcMux,
+      public GrpcStreamCallbacks<envoy::service::discovery::v3alpha::DiscoveryResponse>,
+      public Logger::Loggable<Logger::Id::config> {
+ private:
+   GrpcStream<envoy::service::discovery::v3alpha::DiscoveryRequest,
+             envoy::service::discovery::v3alpha::DiscoveryResponse>
+      grpc_stream_;
+
+}
+```
+
+核心是grpc_stream_，通过GrpcStream可以发送、建立stream流
 
 `GrpcStream` Grpc中的一个流是对`Grpc::AsyncStream`的封装，继承自`Grpc::AsyncStreamCallbacks`，提供了一个` void onReceiveMessage(std::unique_ptr<ResponseProto>&& message) override`接口
 用于返回收到的message，组合了`Grpc::AsyncClient`用来创建`Grpc::AsyncStream`，提供了sendMessage来发送`stream`，同时也提供了`onReceiveMessage`，当收到message后，回调`GrpcStreamCallbacks`的onDiscoveryResponse方法
+
+
+
+
+`Grpc::AsyncStreamCallbacks` 提供了`onReceiveMessage`的回调，通过`Grpc::AsyncStream`发出message后，通过这个callback获得返回的消息
+
+
+`Grpc::AsyncClient` grpc Client 来创建一个`Grpc::AsyncStream`
 
 `GrpcStreamCallbacks`，提供了几个和stream相关的callback
 
@@ -1941,8 +2237,6 @@ public:
 5. `HttpSubscriptionImpl` REST
 
 
-`GrpcMuxImpl` 通过调用底层的`GrpcStream`来发送stream，同时继承了`GrpcStreamCallbacks`用来接收stream返回的message
-
 `SubscriptionCallbacks` 提供`onConfigUpdate`、`onConfigUpdateFailed`、`resourceName`等回调，每一个xDS类型都继承这个callback用来接收配置更新的通知
 
 `GrpcMux` 用来管理单个stream上的多个订阅的，典型的就是ADS stream上处理EDS、CDS、LDS等订阅，主要是提供了start、pause、resume、addOrUpdateWatch等等
@@ -1954,6 +2248,9 @@ public:
 `GrpcMuxCallbacks` 核心的ADS回调，用于对接收到的xDS资源进行对应的回调，核心接口是:
 
 ```C++
+/**
+ * A grouping of callbacks that a GrpcMux should provide to its GrpcStream.
+ */
 class GrpcMuxCallbacks {
 public:
   virtual ~GrpcMuxCallbacks() = default;
@@ -1986,6 +2283,9 @@ public:
 };
 ```
 
+等于SubscriptionCallbacks，两者是一致的，含义相同。
+
+
 
 ```C++
 class Subscription {
@@ -2006,8 +2306,152 @@ public:
    */
   virtual void updateResourceInterest(const std::set<std::string>& update_to_these_names) PURE;
 };
+
+class SubscriptionCallbacks {
+public:
+  virtual ~SubscriptionCallbacks() = default;
+  virtual void onConfigUpdate(const Protobuf::RepeatedPtrField<ProtobufWkt::Any>& resources,
+                              const std::string& version_info) PURE;
+  virtual void
+  onConfigUpdate(const Protobuf::RepeatedPtrField<envoy::service::discovery::v3alpha::Resource>&
+                     added_resources,
+                 const Protobuf::RepeatedPtrField<std::string>& removed_resources,
+                 const std::string& system_version_info) PURE;
+  virtual void onConfigUpdateFailed(ConfigUpdateFailureReason reason, const EnvoyException* e) PURE;
+  virtual std::string resourceName(const ProtobufWkt::Any& resource) PURE;
+};
 ```
 
+所有的上层API(LDS/CDS/EDS/..)等都继承了`SubscriptionCallbacks`用于获取订阅到的数据。
+GrpcMuxSubscriptionImpl继承GrpcMuxCallbacks和Subscription可以给上层API(CDS/LDS/EDS...)等提供资源订阅的接口(Subscription)来订阅资源
+每一类资源都需要有一个GrpcMuxSubscriptionImpl类，这个类负责提供资源订阅、更新资源等，还有将订阅的内容回调给上层API
+
+
+```c++
+class SubscriptionFactory {
+public:
+  virtual ~SubscriptionFactory() = default;
+
+  /**
+   * Subscription factory interface.
+   *
+   * @param config envoy::api::v2::core::ConfigSource to construct from.
+   * @param type_url type URL for the resource being subscribed to.
+   * @param scope stats scope for any stats tracked by the subscription.
+   * @param callbacks the callbacks needed by all Subscription objects, to deliver config updates.
+   *                  The callbacks must not result in the deletion of the Subscription object.
+   * @return SubscriptionPtr subscription object corresponding for config and type_url.
+   */
+  virtual SubscriptionPtr
+  subscriptionFromConfigSource(const envoy::config::core::v3alpha::ConfigSource& config,
+                               absl::string_view type_url, Stats::Scope& scope,
+                               SubscriptionCallbacks& callbacks) PURE;
+};
+
+
+  case envoy::config::core::v3alpha::ConfigSource::ConfigSourceSpecifierCase::kAds: {
+    if (cm_.adsMux()->isDelta()) {
+      result = std::make_unique<DeltaSubscriptionImpl>(
+          cm_.adsMux(), type_url, callbacks, stats,
+          Utility::configSourceInitialFetchTimeout(config), true);
+    } else {
+      result = std::make_unique<GrpcMuxSubscriptionImpl>(
+          cm_.adsMux(), callbacks, stats, type_url, dispatcher_,
+          Utility::configSourceInitialFetchTimeout(config));
+    }
+    break;
+  }
+```
+
+针对每一个type_url的资源都创建一个订阅器，等待内容回调。实际订阅器就是GrpcMuxSubscriptionImpl对象，接下来我们看下`GrpcMuxSubscriptionImpl`对象
+
+```c++
+class GrpcMuxSubscriptionImpl : public Subscription,
+                                GrpcMuxCallbacks,
+                                Logger::Loggable<Logger::Id::config> {
+public:
+  GrpcMuxSubscriptionImpl(GrpcMuxSharedPtr grpc_mux, SubscriptionCallbacks& callbacks,
+                          SubscriptionStats stats, absl::string_view type_url,
+                          Event::Dispatcher& dispatcher,
+                          std::chrono::milliseconds init_fetch_timeout);
+
+  // Config::Subscription
+  void start(const std::set<std::string>& resource_names) override;
+  void updateResourceInterest(const std::set<std::string>& update_to_these_names) override;
+
+  // Config::GrpcMuxCallbacks
+  void onConfigUpdate(const Protobuf::RepeatedPtrField<ProtobufWkt::Any>& resources,
+                      const std::string& version_info) override;
+  void onConfigUpdateFailed(Envoy::Config::ConfigUpdateFailureReason reason,
+                            const EnvoyException* e) override;
+  std::string resourceName(const ProtobufWkt::Any& resource) override;
+
+private:
+  void disableInitFetchTimeoutTimer();
+
+  GrpcMuxSharedPtr grpc_mux_;
+  SubscriptionCallbacks& callbacks_;
+  SubscriptionStats stats_;
+  const std::string type_url_;
+  GrpcMuxWatchPtr watch_{};
+  Event::Dispatcher& dispatcher_;
+  std::chrono::milliseconds init_fetch_timeout_;
+  Event::TimerPtr init_fetch_timeout_timer_;
+};
+```
+
+组合了GrpcMuxSharedPtr(NewGrpcMuxImpl)增量实现、或者(GrpcMuxImpl)全量实现
+`GrpcMuxImpl` 通过调用底层的`GrpcStream`来发送stream，同时继承了`GrpcStreamCallbacks`用来接收stream返回的message
+
+
+
+```C++
+class GrpcMuxImpl
+    : public GrpcMux,
+      public GrpcStreamCallbacks<envoy::service::discovery::v3alpha::DiscoveryResponse>,
+      public Logger::Loggable<Logger::Id::config> {
+
+  private:
+    GrpcStream<envoy::service::discovery::v3alpha::DiscoveryRequest,
+             envoy::service::discovery::v3alpha::DiscoveryResponse>
+      grpc_stream_;
+}
+
+
+class GrpcStream : public Grpc::AsyncStreamCallbacks<ResponseProto>,
+                   public Logger::Loggable<Logger::Id::config> {
+  private:
+    Grpc::AsyncClient<RequestProto, ResponseProto> async_client_;
+    Grpc::AsyncStream<RequestProto> stream_{};
+}
+```
+
+```C++
+/**
+ * Manage one or more gRPC subscriptions on a single stream to management server. This can be used
+ * for a single xDS API, e.g. EDS, or to combined multiple xDS APIs for ADS.
+ */
+class GrpcMux {
+public:
+  virtual ~GrpcMux() = default;
+  virtual void start() PURE;
+  virtual GrpcMuxWatchPtr subscribe(const std::string& type_url,
+                                    const std::set<std::string>& resources,
+                                    GrpcMuxCallbacks& callbacks) PURE;
+  virtual void pause(const std::string& type_url) PURE;
+  virtual void resume(const std::string& type_url) PURE;
+  virtual bool isDelta() const PURE;
+
+  // For delta
+  virtual Watch* addOrUpdateWatch(const std::string& type_url, Watch* watch,
+                                  const std::set<std::string>& resources,
+                                  SubscriptionCallbacks& callbacks,
+                                  std::chrono::milliseconds init_fetch_timeout) PURE;
+  virtual void removeWatch(const std::string& type_url, Watch* watch) PURE;
+  virtual bool paused(const std::string& type_url) const PURE;
+};
+
+```
 
 ## InitManager
 
@@ -2339,6 +2783,135 @@ void ClusterManagerInitHelper::initializeSecondaryClusters() {
 }
 ```
 
-
-
 `ClusterFactoryContext`: 传递给`ClusterFactory`的一些上下文信息
+
+
+
+
+
+## grpc client
+
+基本概念解释:
+
+* `AsyncRequest` An in-flight gRPC unary RPC. 单向的grpc请求，可能正在发送中，可以cancel掉
+* `RawAsyncStream`  An in-flight gRPC stream. 通过grpc stream来发送请求
+* `RawAsyncRequestCallbacks`
+* `RawAsyncStreamCallbacks`
+* `RawAsyncClient`  发送grpc请求，异步接收响应
+
+
+
+* `AsyncClientImpl`
+继承自RawAsyncClient，具备发送单向grpc消息，返回一个AsyncRequest，可以对这个请求做cancel，response通过RawAsyncRequestCallbacks返回
+也可以发送grpc stream，返回一个RawAsyncStream，一个stream，通过这个stream可以发送消息，response通过RawAsyncStreamCallbacks返回
+
+
+
+
+
+## Envoy 性能优化
+
+
+
+
+## Http filter status
+
+分为两类:
+
+* FilterHeadersStatus
+  1. Continue
+  2. StopIteration                  // 停止对下面的filter进行iterate，除非主动调用continueDecoding()/continueEncoding()来继续
+  3. ContinueAndEndStream           // 继续iterate下面的filter，但是忽略后续的data和trailer
+  4. StopAllIterationAndBuffer      // 停止iterate下面的filter，但是会继续buffer后续的data，达到buffer的限制后会返回401或500
+  5. StopAllIterationAndWatermark   // 停止iterate下面的filter，但是会继续buffer后续的data，直到触发high watermark
+
+* FilterDataStatus
+  1. Continue
+  2. StopIterationAndBuffer
+  3. StopIterationAndWatermark
+  4. StopIterationNoBuffer
+
+* FilterTrailersStatus
+  1. Continue
+  2. StopIteration
+
+* FilterMetadataStatus
+  1. Continue
+
+
+
+
+
+
+  ## TLS证书
+
+
+  ```yaml
+  static_resources:
+  listeners:
+  - address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 443
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager
+          codec_type: auto
+          stat_prefix: ingress_http
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: backend
+              domains:
+              - "*"
+              routes:
+              - match:
+                  prefix: "/"
+                route:
+                  cluster: service1
+          http_filters:
+          - name: envoy.filters.http.router
+            typed_config: {}
+      # 服务端验证
+      transport_socket:
+        name: envoy.transport_socket.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.api.v2.auth.DownstreamTlsContext
+          common_tls_context:
+            # 证书相关的信息
+            tls_certificates:
+            # 证书
+            - certificate_chain: { filename: "/root/gateway/api.alimesh.alibaba-inc.com_SHA256withRSA_EC.crt" }
+            # 私钥
+              private_key: { filename: "/root/gateway/api.alimesh.alibaba-inc.com_SHA256withRSA_EC.key" }
+              # 客户端验证
+            validation_context:
+              trusted_ca:
+                # 验证客户端证书的root ca，一般用系统的就足够
+                filename: "/etc/ssl/certs/ca-certificates.crt"
+                # 验证模式(Peer certificate verification mode.)，默认客户端证书必须是经过指定CA列表中的CA进行验证的
+              trust_chain_verification: ACCEPT_UNTRUSTED
+          require_client_certificate: false
+  clusters:
+  - name: service1
+    connect_timeout: 0.25s
+    type: strict_dns
+    lb_policy: round_robin
+    load_assignment:
+      cluster_name: service1
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 9999
+admin:
+  access_log_path: "/dev/null"
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 8001
+  ```
