@@ -30,8 +30,8 @@ yum install docker-ce -y
 # service section
 # vim /usr/lib/systemd/system/docker.service
 # ExecStartPost=/usr/sbin/iptables -P FORWARD ACCEPT
-# Environment="HTTP_PROXY=http://30.57.177.157:8888"
-# Environment="HTTPS_PROXY=http://30.57.177.157:8888"
+# Environment="HTTP_PROXY=http://30.57.177.111:3128"
+# Environment="HTTPS_PROXY=http://30.57.177.111:3128"
 
 mkdir -p /etc/docker/
 tee /etc/docker/daemon.json <<-'EOF'
@@ -76,3 +76,6 @@ kubectl delete node NODE_ID
 
 # node reset
 kubeadm reset
+
+
+sudo kubeadm join 11.164.60.62:6443 --token wzalxi.q55omjmlgwisxsa0 --discovery-token-ca-cert-hash sha256:130420acbb5b2af96c35c99d0eb98f1e6aa8224ea53cc17459827433fb7398b2 -v=5

@@ -70,6 +70,42 @@ int main(int argc, char const *argv[]) {
 * https://os.phil-opp.com/red-zone/
 
 
+## 虚拟地址映射
+
+在开启分页的情况下，内核如何直接访问物理地址，因此我们需要有一套机制将虚拟地址映射到对应的物理地址上，所以就有了一些技术方案。
+
+1. Identity Mapping
+
+  虚拟地址和物理地址一一映射，带来的问题就是会导致内存碎片(外部)，和分段机制的缺点是一样的，导致在需要一片连续内存的时候无法被满足。
+  而且超过frame范围的虚拟地址空间没有办法被映射。
+
+  ![Identity Mapping](img/identity-mapped-page-tables.svg)
+
+2. Map at a Fixed Offset
+
+  offset+虚拟地址空间地址来一一映射到frame，这样可以避免Identity Mapping因为超过frame范围的虚拟地址没有办法进行映射的问题，但是缺点就是
+  每次创建一个页表就需要创建这样的一个映射关系。而且它不允许访问其他地址空间的页表，这在创建新进程时很有用。
+
+  ![Map at a Fixed Offset](img/page-tables-mapped-at-offset.svg)
+
+3. Map the Complete Physical Memory
+
+  在Identify Maaping的基础上添加offset将虚拟地址映射到全部物理内存中，这个方法可以使得内核可以访问任意的物理内存。但是需要分配很多页表
+  无论是已经映射的虚拟地址还是没有映射的。这些页表会占用比较多的内存。不过我们可以通过huge page的方式来减少需要存储的页表大小。
+
+  ![map-complete-physical-memory](img/map-complete-physical-memory.svg)
+
+4. Temporary Mapping
+
+  ![Temporary Mapping](img/temporarily-mapped-page-tables.svg)
+
+
+5. Recursive Page Tables
+
+  ![Recursive Page Tables](img/recursive-page-table.svg)
+
+
+
 ## SIMD和OS
 
 SIMD(Single Instruction Multiple Data)，单条指令可以操作多个字节的数据。目前x86支持三种SIMD的标准:

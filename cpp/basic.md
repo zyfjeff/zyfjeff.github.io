@@ -11,6 +11,41 @@
 
 https://gcc.gnu.org/wiki/VerboseDiagnostics#dependent_base
 
+
+## 底层、顶层const
+
+* 如果const右结合修饰的为类型或者*，那这个const就是一个底层const
+* 如果const右结合修饰的为标识符，那这个const就是一个顶层const
+
+
+哪些是底层const哪些是顶层const?
+
+* int，double，float和long long等基本内置数据类型的const都是顶层const。
+* 引用的const都是底层const。
+* 指针既可以是顶层const也可以是底层const，也可以同时是两种const。
+
+
+```cpp
+int const * const p;
+      ^       ^
+      1       2
+```
+
+1. 底层const(上述代码中1的位置)主要影响的是指向的对象，表示指向的对象不能改变其内容，但是可以改变p本身的指向，使它指向另外一个对象
+2. 顶层const(上述代码中2的位置)主要影响的是对象本身，表示对象p本身无法修改，也就是没办法指向另外一个对象
+
+
+* 底层const是不可忽略的。
+
+```cpp
+const char* str = "996ICU251";
+char *c = str;//不合法！
+```
+
+> 当执行对象的拷贝过程中（赋值操作，函数的值传递）时，如果被拷贝对象拥有底层const资格，则拷贝对象必须拥有相同的底层const资格。
+> 如果拷贝对象拥有底层const，则无所谓被拷贝对象是否有const。
+> 对于一个既是顶层const又是底层const对象来说，无所谓它是否为顶层const，只要关注它的底层const就行了
+
 ## Literal Type
 
 C++ core language对其进行了定义，一个LiteralType类型满足下面的要求:
@@ -725,6 +760,8 @@ private:
   bool cancelled_;
 };
 ```
+
+
 
 ## 线程/进程模型总结
 

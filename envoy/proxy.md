@@ -1147,8 +1147,11 @@ void EdsClusterImpl::onConfigUpdate(const Protobuf::RepeatedPtrField<ProtobufWkt
   4.6 完成配置批量更新，初始化完成
 
 
-通过上面的过程可以看出，核心的方法就是`EdsClusterImpl::updateHostsPerLocality`，针对单个优先级的更新。
+5. `HostSetImpl::partitionHosts`
 
+
+
+通过上面的过程可以看出，核心的方法就是`EdsClusterImpl::updateHostsPerLocality`，针对单个优先级的更新。
 
 
 1. 遍历所有要增加的新hosts，也就是new_hosts
@@ -2899,6 +2902,13 @@ void ClusterManagerInitHelper::initializeSecondaryClusters() {
     connect_timeout: 0.25s
     type: strict_dns
     lb_policy: round_robin
+    transport_socket:
+      name: envoy.transport_socket.tls
+      typed_config:
+          "@type": type.googleapis.com/envoy.api.v2.auth.UpstreamTlsContext
+          CommonTlsContext:
+            validation_context:
+              trust_chain_verification: ACCEPT_UNTRUSTED
     load_assignment:
       cluster_name: service1
       endpoints:

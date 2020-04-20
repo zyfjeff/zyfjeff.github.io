@@ -1036,7 +1036,7 @@ orange 橘黄色
 
 ##  Lession 17
 
-* employee
+* employee 雇员
   employ 雇用
   employer 雇主
   trainer 培训
@@ -2641,3 +2641,327 @@ This is my home
 She always eats her lunch
 The children always do their homework
 Mr Sawer usually reads his newspaper
+
+
+##  57/58
+
+* o'clock 整点
+
+* shop 商店(规模比较小)
+  department store 百货商店
+
+* moment
+  wait a second
+  wait a moment
+  wait a minute
+  She is learning English at a moment
+
+
+
+It is .....
+
+1. 天气 It is terriable in spring
+
+2. 点钟 It is eight now
+
+3. 电话 It's me, Venus
+
+交通方式:
+
+1. on foot
+2. by bike
+3. by bus
+4. by car
+5. by train
+6. by air
+
+How do you go to school?
+
+Ther are going to school on foot
+
+一般现在时 vs 现在进行时
+
+* 使用情况不同
+
+一般现在时: 习惯的状态、经常的动作、真理
+现在进行时: 此时此刻正在做、一段时间内一直
+
+* 结构不同
+
+一般现在时: 主语 + is/am/are, 主语+v(动词原型)
+现在进行时: 主语 + is/am/are + doing
+
+* 时间状语不同
+
+* 一般现在时 every、always、usually、often、sometimes
+* 现在进行时: now、at the moment
+
+what's the time?
+what time is it?
+
+
+连读(一辅一元，前辅后元):
+it is -> it is (t和i连读)
+an orange
+put on
+stop it
+take off
+come on in
+live at
+clean it up
+
+省读:
+sit down
+part time
+big cake
+but now
+good moring
+not that one
+good night
+bookcase
+
+口语习惯:
+
+I'm gonna sit down on the grass (gonna -> going to)
+I want to put on my shirt(want to -> wanna)
+
+
+
+## 59/60
+
+* envelope 信封
+* writing paper 信纸(不可数)
+  a piece of writing paper
+
+* shop assisant 售货员
+
+S、M、L
+XS -> extra small
+
+small/medium/large size
+
+size 6/7 反过来说，7码
+class 2 二班
+line 10 十号线
+
+a bottle of glue
+a stick of chalk / a box of chalk
+
+* change 零钱
+
+keep the change 不用找零了
+
+买东西用来询问的句型:
+
+1. I want some...../I want a ....
+2. Do you have any...?
+3. n + please
+
+* only adv(仅仅、只有)
+I have two watches
+I only have two watches
+I have only two watches
+
+
+
+使用场景: That's all thank you
+
+1. 发音完毕
+2. 讲课结束时
+3. 购物时
+
+what else?
+
+Do you have any...?
+
+1. + 可数名词
+
+  Do you have any friends/envelopes/bananas/....
+
+2. + 不可数名词
+
+  Coffee\tea\time....
+
+Do you have any shorts
+I want some shorts, please
+Yes what size do you want?
+I want medium size
+Can I have a try? 我可以试穿吗?
+Yes of course
+Ok this pair please
+
+
+## 61/62
+
+1. feel 感觉、look 看起来 感官动词
+2. must
+3. call 叫、请
+4. telephone 电话
+  打电话的几种说法:
+    * call sb
+    * phone sb
+    * give sb a call
+    * give sb a phone
+
+5. remember 记住、记得
+6. tongue 舌头
+  tongue twister 绕口令
+
+a cold handshake
+a cold color
+a piece of news
+
+in bed 生病卧床
+He is in the bed 他在床上
+He is in bed 他卧病在床
+
+in the hospital
+in hospital
+
+
+sb怎么样?
+
+what's the matter with him?
+what's wrong with sb?
+what's up?
+
+
+So he muts stay in bed for a week (持续一个星期，需要加for)
+That's good news for Jimmy (for 对于某人来说)
+English is very easy for me
+
+感官动词: 半系动词(用形容词来修饰，和系动词接近)，一半实义动词(时态人称单复数等变化和实义动词一致，用副词修饰)
+
+
+1. headache
+2. earache
+3. toothache
+4. stomach ache
+
+
+have a xxxache
+
+
+1. flu 流感
+2. bird flu
+3. swine flu
+
+have flu/have bird flu
+
+4. measles 麻疹
+  have measles
+
+5. mumps
+6. dentist 牙医
+  scientist
+  tourist
+  typist
+
+7. medicine 药
+
+
+He has a headache
+What must he do?
+He must take an aspirin
+
+The baby has a temperature
+what must we do?
+He must see the doctor
+
+
+He is under the weather
+He has a runny nose、sneezing or a scratchy throat
+He has an allergy
+
+I'm troubled by ...
+
+常用患病的词:
+
+1. have/has
+2. take/catch
+3. get...
+4. suffer from...
+
+
+## 63/64
+
+* better
+* certainly adv 当然
+* get up
+  go to bed / go to sleep
+
+* yet adv 还、仍
+* rich 油腻的、富有的
+
+  rich food 油腻的食物
+  mild food 清淡的食物
+  spicy food 辛辣的食物
+  green food 绿色食品
+  fast food 快餐
+  sea food 海鲜
+
+
+修饰感官动词，需要用形容词(类似系动词)
+
+
+yet 否定疑问句末
+mustn't 绝对不
+You are better now, but you mustn't go to school yet
+
+
+You must stay in bed two days again(强调再来两天，而不是再卧床。所以不能用again)
+You must stay in bed for another two days
+
+I must stay in BJ for another two weeks
+We must study English for another two years
+
+
+
+发烧
+1. have a fever
+2. have a temperature
+
+  He has a ferver
+  Do you have a fever?
+  Does he have a fever?
+  I don't have a fever
+  He doesn't have a fever
+
+
+卧床
+
+1. stay in bed
+2. remain in bed
+
+
+
+He every day can get up  about two hours (重点是他可以起床，而不是every day)
+He can get up for(长达 + 时间段) about two hours every day  英文中，要突出谁、做了什么
+
+
+each day(强调个体) vs every day(强调整体)
+
+Hi every one!
+Each man has his own name
+
+
+
+You(主) must(情态动词) keep(动词) the room(宾语) warm (宾补)
+
+
+must:
+  疑问: Must I clean the room?
+  否定:
+    1. You mustn't make noise here
+    2. I don't need to clean the room 不必
+
+
+* play: play games/play the violin/play football/play basketball
+* match: 火柴 matches 复数
+* talk: talk to sb 与....谈话 Don't talk to me like that!/Don't talk to strangers
+* library: in the library
+* so: adv 如此地 so beautiful/ so much
+* lean out of: 身体探出、探身出去 lean out of the window
+
+
+have/make/take/get
