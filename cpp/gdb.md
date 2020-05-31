@@ -1,4 +1,5 @@
-## 安装pretty script
+
+## Install pretty script
 
 1. 下载对应gcc版本的pretty script
 
@@ -18,6 +19,14 @@ register_libstdcxx_printers (None)
 end
 ```
 
-## 常用Command
+## Command
 
 * info vbtl VAR 查看虚表
+
+## Tips
+
+1. set print object on
+2. ptype obj/class/struct
+3. set print pretty on
+4. set print vtbl on
+5. handle SIGUSR1 nostop

@@ -206,6 +206,18 @@ perf stat:
 -p specified PID
 -a CPU counter statistics for the entire system
 
+
+## Tcmalloc perf
+
+yum install pprof graphviz
+
+
+* heapprofiler
+pprof --base=/var/log/envoy/envoy.prof.0001.heap --svg /home/admin/alimesh/bin/envoy /var/log/envoy/envoy.prof.0008.heap
+
+
+* cpuprofiler
+
 ## Link
 [理解 %IOWAIT (%WIO)](http://linuxperf.com/?p=33)
 

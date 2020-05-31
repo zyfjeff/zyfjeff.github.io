@@ -932,7 +932,6 @@ ClusterManager 管理连接池和load balancing，在多个work线程共享这�
 
 ## EDS更新机制
 
-
 重要函数分析:
 
 * `HostSetImpl::updateHosts`(针对单个hostset进行全量更新)
@@ -1187,19 +1186,118 @@ void EdsClusterImpl::onConfigUpdate(const Protobuf::RepeatedPtrField<ProtobufWkt
 
 ## Load balancer
 
+一个集群下面是多个`LocalityLbEndpoints`，一个`LocalityLbEndpoints`包含一个`Locality`、一个优先级、一个区域的权重、以及一批`LbEndpoint`
+一个`LbEndpoint`包含了一个机器和对应的元数据和权重。
+
 一个集群下面可以配置多个Priority和多个Locality，每一个Priority和Locality可以包含一组endpoint，Priority和Locality是多对多的关系
 也就是说一个Priority可以包含多个Locality的机器列表，一个Locality也可以包含多个priority，当一个priority中的主机不可用/不健康的时候
 会去从下一个priority中进行选择。
 
-PrioritySetImpl 包含了一个集群下的所有host，然后按照priority维度对给定集群进行分组，一个集群会有多个Priority
-HostSetImpl 按照priority来维护一组host集合，构造函数需要提供priority，然后通过updateHosts来添加host。这组host可能来自于多个Locality
+
+一个集群包含一个`PrioritySetImpl`，包含了一个集群下的所有host，然后按照`priority`维度对给定集群进行分组，一个集群会有多个`Priority`
+
+
+一个`PrioritySetImpl`里面就是一个vector，索引就是优先级，内容就是这个优先级下对应的`HostSetImpl`
+`PrioritySetImpl` =>  `std::vector<std::unique_ptr<HostSet>> host_sets_;`
+
+
+一个`HostSetImpl` 就是按照priority来维护一组host集合，构造函数需要提供priority，然后通过updateHosts来添加host。这组host可能来自于多个`Locality`
+`HostSetImpl`会根据`degraded`、`healthy`、`excluded`等唯独将Host分类，然后针对每一个分类将Host按照`Locality`进行分类，也就是通过`HostsPerLocalityImpl`来保存
+
+```cpp
+uint32_t priority_;
+uint32_t overprovisioning_factor_;
+HostVectorConstSharedPtr hosts_;
+HealthyHostVectorConstSharedPtr healthy_hosts_;
+DegradedHostVectorConstSharedPtr degraded_hosts_;
+ExcludedHostVectorConstSharedPtr excluded_hosts_;
+HostsPerLocalityConstSharedPtr hosts_per_locality_{HostsPerLocalityImpl::empty()};
+HostsPerLocalityConstSharedPtr healthy_hosts_per_locality_{HostsPerLocalityImpl::empty()};
+HostsPerLocalityConstSharedPtr degraded_hosts_per_locality_{HostsPerLocalityImpl::empty()};
+HostsPerLocalityConstSharedPtr excluded_hosts_per_locality_{HostsPerLocalityImpl::empty()};
+LocalityWeightsConstSharedPtr locality_weights_;
+```
+
+一个`HostsPerLocalityImpl` 按照`locality`的维度组织host集合，核心数据成员`std::vector<HostVector>`，第一个host集合是local locality。
+
+```cpp
+// The first entry is for local hosts in the local locality.
+std::vector<HostVector> hosts_per_locality_;
+```
+
+一次host更新需要将所有的host按照优先级、locality、healthy等纬度组装成对应的结构，而`PriorityStateManager`在其中充当了重要的角色。
+`PriorityStateManager` 管理一个集群的`PriorityState`，而PriorityState则是按照priority分组维护的一组host和对应的locality weight map，
+
+```cpp
+using PriorityState = std::vector<std::pair<HostListPtr, LocalityWeightsMap>>;
+using LocalityWeightsMap =
+    std::unordered_map<envoy::config::core::v3::Locality, uint32_t, LocalityHash, LocalityEqualTo>;
+```
+
+更新host的时候先给这批host生成`PriorityState`，vector的下标是优先级，保存了一个优先级下的所有host，以及这个优先级对应的所有Locality和权重
+通过`PriorityStateManager::updateClusterPrioritySet`就可以更新集群的`PrioritySetImpl`的指定优先级下的所有Host。这个函数内部会通过`PriorityState`拿到区域权重
+然后将所有的Host按照`Locality`进行组织起来，然后计算出每一个`Locality`的权重。最后调用`PrioritySetImpl::updateHosts`来更新指定优先级的Host。
+
+
 HostDescriptionImpl 对upstream主机的一个描述接口，比如是否是canary、metadata、cluster、healthChecjer、hostname、address等
 HostImpl 代表一个upstream Host
-HostsPerLocalityImpl 按照locality的维度组织host集合，核心数据成员`std::vector<HostVector>`，第一个host集合是local locality。
-PriorityStateManager 管理一个集群的PriorityState，而PriorityState则是按照priority分组维护的一组host和对应的locality weight map，
-PrioritySetImpl包含了多个HostSetImpl，一个HostSetImpl则包含了一个HostsPerLocalityImpl
 LocalityWeightsMap key是Locality，value是这个Locality的权重
 
+
+**实现增量更新的思路**:
+
+默认Config Server获取到Host包含了ip、所在机房、单元、machine group、权重还有一些metadata等，都是机器纬度的信息，除了这些信息外，Envoy还需要优先级信息、机器健康状况等
+目前可以默认使用优先级0代替 。除了这些机器纬度的信息外，还需要有服务纬度的信息(也可以称为集群纬度的信息)，比如区域权重(每个区域的权重)、过载因子、Endpoint过期时间等。目前这个部分可以不实现，
+等开始支持这类功能的时候再单独通过Config Server的SDK通知我这类元信息发生了改变。这个时候就可以更新Locality weight，修改`PriorityState`以及过载因子等。这个时候就需要触发forch rebuild(重新建立LB)。
+
+
+1. 判断host是新增还是updated
+2. 如果是update则先清除`PENDING_DYNAMIC_REMOVAL`，因为马上要加回来了。
+3. 判断是否需要原地更新 (有健康检查、并且健康检查的地址不同，这个时候不能跳过原地更新，必须要更新)
+4. 如果是原地更新
+  1. 判断健康状态是否发生了变化，有变化的话都会导致forch rebuild
+  2. metadata变化也需要导致forch rebuild(config server最好直接告知我metadata发生了变化)，并更新host的metadata
+  3. 优先级发生了改变，需要更新对应机器的优先级，然后把这个机器添加到当前优先级的列表中
+
+5. 如果不是原地更新
+  1. 添加host到当前优先级
+  2. 如果健康检查开启的话，先设置这个机器为FAILED_ACTIVE_AC
+  3. 然后看是否是warmHosts，如果是就设置为PENDING_ACTIVE_HC
+
+一个主机发生变化了，有几种情况:
+
+1. 新ip的添加
+2. 老ip的删除
+3. 机房、单元等locality发生了变化 (这个不考虑，这个如果发生了变化会产生添加ip和删除ip两个事件)
+4. 健康状态发生了变化
+5. 优先级发生了变化
+6. 元信息发生了变化
+
+> 健康状态、优先级、元信息发生变化更新host即可
+
+
+
+Config Server Cluster计算逻辑:
+
+1. 按照优先级将added_host和removed_hosts以优先级为纬度分成一个个host vector
+2. 取出一个优先级往all_host_中查找如果是新添加的就放到hosts_added_to_current_priority中(并执行healthy check相关的flag设置)
+   如果不是新的host那就看是否做原地更新，如果是原地更新就直接更新就好了，否则就把这个机器放到hosts_added_to_current_priority中
+   如果发生了优先级改变，那么不光光要更新机器的优先级还需要将这个机器添加到hosts_added_to_current_priority列表中，然后对应的要从
+   这个机器原来所在优先级中进行删除。(这个我们占时不处理，对于增量的场景，可以简单的将修改前的优先级的机器放到removed列表中)
+
+3. 更新host_change，如果都是原地更新，那么很自然host_change为false、优先级发生变化了也是为true、metadata变化了也是true
+   需要将所有host_change为true的场景梳理出来，用于rebuild lb。
+
+4. 拿到当前优先级的host，将hosts_added_to_current_priority追加到当前优先级的列表中，另外需要考虑一个特殊的case:
+  host是存在的，但是健康检查地址发生了改变，那么这个机器需要对当前优先级的host做替换而不是追加了。
+
+5. 调用updateClusterPrioritySet进行更新。
+
+6. 如果locality weight发生了改变就设置host_change为true
+
+
+> updateClusterPrioritySet仍然是全量host进行计算(计算出per locality的结构)，能否再度优化? TODO
+> LocalityWeightMap发生改变需要rebuild，这个如何识别出来? Config Server SDK对于locality weight的变化单独通知，然后我来更新PriorityState结构
 
 
 ```yaml
@@ -2925,3 +3023,34 @@ admin:
       address: 0.0.0.0
       port_value: 8001
   ```
+
+
+
+  ## xDS transport next steps
+
+  1. Collections: 没有一种通用机制来选择资源子集，大家现在普遍的做法是通过在Node中添加一些信息让控制面可以进行计算子集。但是这种方式不通用。Envoy希望引入namesapce机制来选择子集
+     更通用的方法可以是引入一个key/value属性集合去选择请求的资源，对于增量xDS来说也是有意义的。
+
+Ref:
+  https://github.com/envoyproxy/envoy/pull/10689
+  https://github.com/envoyproxy/envoy/issues/10373
+
+  2. Resource immutability: xDS目前没有一个不可以变的资源名到资源的映射关系，目前是控制面结合Node信息来生成或者修改资源名，两个客户端可能看到相同资源名的不同资源，这对于xDS Cache并不优化
+     同时这种行为也会影响多控制面的联邦，不同的控制面必须具有一个全局的资源命名方式。
+
+Ref:
+  https://docs.google.com/document/d/1X9fFzqBZzrSmx2d0NkmjDW2tc8ysbLQS9LaRQRxdJZU/edit?disco=AAAAGQ_84vU&ts=5e61532c&usp_dm=false
+
+
+  3. Per-xDS type resource name semantics: VHDS的资源名是一种特殊结构，格式要求为`<route configuration name>/<host entry>`，这允许控制面根据这种格式来查询指定路由配置中virtual host中的entry
+     在这种情况下，资源名其实就是扮演了namesapce的角色。在未来其他的资源类型的名字将可能需要某种结构，理想的资源命名方案将允许结构，同时留给控制平面一些自由，以便在需要时继续使用不透明命名，而不是将不透明和结构化形式任意混合在一起。
+
+  4. Flat representation: 现如今，资源标识已成为资源名称，节点信息，ConfigSource的权限，URL类型和版本的大杂烩。
+    在无法处理相关proto3消息的人员或系统之间进行通信时，没有标准格式可以对这些信息进行简明的编码。
+    URI提供了一种强大的符合标准的方式来指定此信息。未来的xDS资源命名方案将受益于具有规范的URI表示（除了规范的proto3定义）
+
+  5. Implicit resource payload naming
+    虽然在增量发现中，我们在DeltaDiscoveryResponse中的“资源”消息中有明确提供的资源名称，但SotW资源有效负载却不是这种情况。这意味着xDS代理，缓存和其他中介必须具有按资源类型的识别和反序列化才能知道正在传递的资源有效负载。我们需要为DiscoveryResponses中的SotW资源命名提供更好的解决方案，可能会弃用现有的重复的Any，并用v3 / v4 xDS中的重复的Resource代替。
+
+  6. Aliasing
+    VHDS为xDS引入了别名，因为同一个虚拟主机资源可能会被多个名称（例如， routeConfigA / foo.com，routeConfigA / bar.com）使用。此机制尚未在xDS的其他地方广泛使用，因此用更通用的替代它是理想的。一个有吸引力的替代方案（将在下面的联合讨论中用于其他目的）也将对xDS引入重定向功能。当查询routeConfigA / foo.com或routeConfigA / bar.com时，管理服务器可能会发出重定向，导致xDS客户端获取某些CanonicalVirtualHost资源。通过消除概念上的复杂性，这简化了xDS控制平面的要求。

@@ -7,10 +7,79 @@
 
 ## shared_ptr自定义的删除器保存在哪，为什么可以不用放在模版参数中
 
+## shared_ptr实现copy-on-write
+
+1. read端加锁copy，返回访问拷贝的shared_ptr
+2. write端加锁判断是否是unique，如果是unique直接原地修改，否则拷贝一份并将shared_ptr指向新的位置。
+
 ## Dependent base
 
 https://gcc.gnu.org/wiki/VerboseDiagnostics#dependent_base
 
+## `this->template`
+
+template是用来消除歧义的. 观察下面的代码:
+
+```cpp
+template<class T>
+ int f(T& x) {
+     return x.template convert<3>(pi);
+ }
+```
+
+如果没有template, 则`return x.convert<3>(pi);` 可能被理解为`return ((x.convert) < 3) > (pi)`
+
+
+## iterator traits
+
+```cpp
+
+// 迭代器的类型
+namespace std {
+  struct output_iterator_tag {};
+  struct input_iterator_tag {};
+  struct forward_iterator_tag : public input_iterator_tag {};
+  struct bidirectional_iterator_tag : public forward_iterator_tag {};
+  struct random_access_iterator_tag : public bidirectional_iterator_tag {};
+}
+
+// 所有迭代器的公共类型信息
+namespace std {
+template <typename T>
+struct iterator_traits {
+    typedef typename T::iterator_category   iterator_category;
+    typedef typename T::value_type          value_type;
+    typedef typename T::difference_type     difference_type;
+    typedef typename T::pointer             pointer;
+    typedef typename T::reference           reference;
+};
+}
+```
+
+`std::iterator_traits<T>::value_type val;` 通过这种方式来使用迭代器。
+
+迭代器分类的来实现优化策略:
+
+```cpp
+template <typename Iterator>
+void f(Iterator beg, Iterator end) {
+    f(beg, end, std::iterator_traits<Iterator>::iterator_category());
+}
+
+// special f for random-access iterators.
+template <typename RandomIterator>
+void f(RandomIterator beg, RandomIterator end, std::random_access_iterator_tag) {
+    //...
+    // 可以随机访问
+}
+
+// special f for bidirectional terators.
+template <typename BidirectionalIterator>
+void f(BidirectionalIterator beg, BidirectionalIterator end, std::bidirectional_iterator_tag) {
+    // ...
+    // 可以双向访问
+}
+```
 
 ## 底层、顶层const
 

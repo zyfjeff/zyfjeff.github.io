@@ -98,6 +98,57 @@ class MyClass {
 上面的代码是无法编译的，因为传递`std::bind()`的结果给另外一个`std::bind()`是一个特殊的case。正常情况下`std::bind(F, arg)()`最终计算为`F(arg)`。
 除非arg是另一个`std::bind()`调用的结果，在这种情况下，它将求值为`F(arg())`。如果将arg可以转换为`std::function<void()>`，则会失去`std::bind`的效果。
 
+> This doesn’t compile because passing the result of std::bind() to another std::bind() is a special case. Normally, std::bind(F, arg)() evaluates to F(arg),
+> except when arg is the result of another std::bind() call, in which case it evaluates to F(arg()). If arg is converted to std::function<void()>, the magic behavior is lost.
+
 将`std::bind()`应用于您无法控制的类型始终是一个错误，`DoStuffAsync()`不应该应用`std::bind()`到模版参数，`absl::bind_front`或`lambda`都可以正常工作。
 
-`DoStuffAsync()`的作者甚至可能进行了完全绿色的测试，因为它们始终将lambda或std :: function作为参数传递，而从不传递std :: bind（）的结果。遇到此错误时，MyClass的作者会感到困惑。
+`DoStuffAsync()`的作者甚至可能进行了完全初步的测试，因为它们始终将`lambda`或`std::function`作为参数传递，而从不传递`std::bind()`的结果。遇到此错误时，`MyClass`的作者会感到困惑。
+
+`std::bind()`的这种特殊情况有用吗? 并不是的。它只会产生阻碍。如果要通过编写嵌套的`std::bind`来调用函数，则实际上应该编写一个`lambda`或命名函数来代替。
+
+希望这些可以让您相信`std::bind()`很容易出错，新手和`C++`专家都容易陷入运行时和编译时的陷阱，现在，我将尝试证明即使正确使用了`std::bind()`，通常还会有另外一个更具可读性的问题。
+
+* 不带占位符的`std::bind()`调用最好改为lambda
+
+```cpp
+std::bind(&MyClass::OnDone, this)
+```
+
+vs
+
+```cpp
+[this]() { OnDone(); }
+```
+
+* `std::bind`绑定部分函数参数的场景可以更改为`absl::bind_front`，并且你使用的占位符越多，这种易读性问题越明显
+
+```cpp
+std::bind(&MyClass::OnDone, this, std::placeholders::_1)
+```
+
+vs
+
+```cpp
+absl::bind_front(&MyClass::OnDone, this)
+```
+
+至于`absl::bind_front`和`lambda`之间如何作出选择，请大家自我决定。
+
+下面这些场景覆盖了99%的`std::bind`使用场景，看起来很有趣。
+
+* 忽略某些参数: `std::bind(F, _2)`
+* 使用相同的参数多次: `std::bind(F, _1, _1)`
+* 在末尾绑定一个参数: `std::bind(F, _1, 42)`
+* 改变参数的顺序: `std::bind(F, _2, _1)`
+* 使用函数组合: `std::bind(F, std::bind(G))`
+
+这些高级用途可能会`std::bind`占有一席之地。在使用它们之前，请考虑`std::bind`的所有已知问题，并问自己是否值得节省一些字符或代码行。
+
+### Conclusion
+
+避免使用`std::bind`，使用`lambda`或者`absl::bind_front`来代替。
+
+### Further Reading
+
+'’Effective Modern C++’’, Item 34: Prefer lambdas to std::bind.
