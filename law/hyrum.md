@@ -31,3 +31,6 @@ Makes the Rounds on Twitter
 
 
 “bug-for-bug compatibility”。
+
+
+当一个 API有足够的用户的时候，在约定中你承诺的什么都无所谓，所有在你系统里面被观察到的行为都会被一些用户直接依赖。

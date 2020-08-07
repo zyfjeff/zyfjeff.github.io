@@ -526,7 +526,8 @@ decltype(auto) z2 = std::move(z); // int&&
 
 ## inline static data members
 
-Since C++17, static data members can be declared inline. An inline static data member can be defined and initialised in the class definition.
+Since C++17, static data members can be declared inline.
+An inline static data member can be defined and initialised in the class definition.
 
 ```cpp
 struct X {

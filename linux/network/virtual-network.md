@@ -26,5 +26,3 @@ $ ip link set vxlan0 up
 ```shell
 10.20.1.0/24 dev vxlan0  proto kernel  scope link  src 10.20.1.2
 ```
-
-3.

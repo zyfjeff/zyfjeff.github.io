@@ -2965,3 +2965,46 @@ must:
 
 
 have/make/take/get
+
+
+## 65/66
+
+* Dad
+
+* key 钥匙 可数名词
+  the key to the door 门的钥匙
+  the key to the car
+  the color of the book
+
+* baby 婴儿、宝贝
+  baby-kid(child)-teenager
+  baby, honey, sweetheart
+
+* listen(听) vs hear(听见)
+  Listen! Can you hear it?
+
+  Look(看) vs See(看见)
+
+* enjoy 玩的开心、喜欢
+  I enjoy my holiday
+  I enjoy the song very much
+  en-使得的词前缀
+  enlarge、endanger、enslave、enjoy
+
+* mum 妈妈
+
+
+You must be(情态动词+be动词原形) home at half past ten
+
+
+回家:
+  1. be home
+  2. get home
+  3. come home
+  4. arrive home
+
+这些home都是副词可以直接修饰动词，如果是名词需要有介词搭配(go to(搭配介词) school)
+
+the answer to the question
+the exit to the building
+the ticket to the movie

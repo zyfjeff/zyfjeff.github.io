@@ -29,4 +29,11 @@ end
 2. ptype obj/class/struct
 3. set print pretty on
 4. set print vtbl on
-5. handle SIGUSR1 nostop
+5. handle SIGUSR1 nostop/ignore
+
+
+
+##  内存dump
+
+1. info proc mapping
+2. dump memory /tmp/data start end

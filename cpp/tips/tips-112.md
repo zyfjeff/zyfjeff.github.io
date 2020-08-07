@@ -26,6 +26,7 @@ my_set.emplace("foo");       // rewritten as an emplace call.
 vec1.push_back(1<<20);
 vec2.emplace_back(1<<20);
 ```
+
 第一行很简单，它将数字1048576添加到`vector`的末尾，但是第二行不是清楚，也不知道`vector`的类型，我们不知道会调用哪个构造函数，因此我们无法知道
 第二行代码在做什么.例如: 如果`vec2`是`std::vector<int>`，那么第二行就是将数字1048576添加到`vector`的末尾，和第一行是一致的。但是如果`vec2`
 是`std::vector<std::vector<int>>`，那么第二行代码会构造一个超过一百行个元素的`vector`。在次过程中会分配几兆字节的内存。

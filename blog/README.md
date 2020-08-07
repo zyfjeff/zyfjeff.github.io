@@ -113,5 +113,3 @@ while (!B.compare_exchange_weak(expected, 1, std::memory_order_acquire)) {
 * https://preshing.com/20170612/can-reordering-of-release-acquire-operations-introduce-deadlock/
 
 
-
-

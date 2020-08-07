@@ -1276,7 +1276,6 @@ LocalityWeightsMap key是Locality，value是这个Locality的权重
 > 健康状态、优先级、元信息发生变化更新host即可
 
 
-
 Config Server Cluster计算逻辑:
 
 1. 按照优先级将added_host和removed_hosts以优先级为纬度分成一个个host vector
@@ -3054,3 +3053,116 @@ Ref:
 
   6. Aliasing
     VHDS为xDS引入了别名，因为同一个虚拟主机资源可能会被多个名称（例如， routeConfigA / foo.com，routeConfigA / bar.com）使用。此机制尚未在xDS的其他地方广泛使用，因此用更通用的替代它是理想的。一个有吸引力的替代方案（将在下面的联合讨论中用于其他目的）也将对xDS引入重定向功能。当查询routeConfigA / foo.com或routeConfigA / bar.com时，管理服务器可能会发出重定向，导致xDS客户端获取某些CanonicalVirtualHost资源。通过消除概念上的复杂性，这简化了xDS控制平面的要求。
+
+
+
+## 自定义cluster实现的关键点
+
+1. 如果这个cluster需要依赖其他cluster才能获取到地址信息，那么这个cluster的initializa phase需要设置为Secondary，否则是Primary
+
+```cpp
+  // Upstream::Cluster
+  Upstream::Cluster::InitializePhase initializePhase() const override {
+    return Upstream::Cluster::InitializePhase::Primary;
+  }
+```
+
+
+2. `cluster`的初始化需要放到`startPreInit`中，初始化完成后需要调用`onPreInitComplete`来完成初始化，最好做一个超时控制
+
+```cpp
+  // Upstream::ClusterImplBase
+  void startPreInit() override;
+```
+
+3. host更新的时候需要按照优先级为纬度来进行更新，并按照优先级纬度统计locality weight map，通过PriorityStateManager来管理
+
+
+PriorityStateManager 在初始化优先级的时候会自动构建好locality weight map
+
+```cpp
+void PriorityStateManager::initializePriorityFor(
+    const envoy::api::v2::endpoint::LocalityLbEndpoints& locality_lb_endpoint) {
+  const uint32_t priority = locality_lb_endpoint.priority();
+  if (priority_state_.size() <= priority) {
+    priority_state_.resize(priority + 1);
+  }
+  if (priority_state_[priority].first == nullptr) {
+    priority_state_[priority].first = std::make_unique<HostVector>();
+  }
+  if (locality_lb_endpoint.has_locality() && locality_lb_endpoint.has_load_balancing_weight()) {
+    priority_state_[priority].second[locality_lb_endpoint.locality()] =
+        locality_lb_endpoint.load_balancing_weight().value();
+  }
+}
+```
+
+4. 计算host变更(增加多少、减少多少，发生变化)，如果没有host变更，但是其他的一些信息发生了变更也需要进行lb重建
+
+```cpp
+ const auto& host_set = priority_set_.getOrCreateHostSet(priority, overprovisioning_factor);
+  HostVectorSharedPtr current_hosts_copy(new HostVector(host_set.hosts()));
+
+  HostVector hosts_added;
+  HostVector hosts_removed;
+  // We need to trigger updateHosts with the new host vectors if they have changed. We also do this
+  // when the locality weight map or the overprovisioning factor. Note calling updateDynamicHostList
+  // is responsible for both determining whether there was a change and to perform the actual update
+  // to current_hosts_copy, so it must be called even if we know that we need to update (e.g. if the
+  // overprovisioning factor changes).
+  // TODO(htuch): We eagerly update all the host sets here on weight changes, which isn't great,
+  // since this has the knock on effect that we rebuild the load balancers and locality scheduler.
+  // We could make this happen lazily, as we do for host-level weight updates, where as things age
+  // out of the locality scheduler, we discover their new weights. We don't currently have a shared
+  // object for locality weights that we can update here, we should add something like this to
+  // improve performance and scalability of locality weight updates.
+  const bool hosts_updated = updateDynamicHostList(new_hosts, *current_hosts_copy, hosts_added,
+                                                   hosts_removed, updated_hosts, all_hosts_);
+  if (hosts_updated || host_set.overprovisioningFactor() != overprovisioning_factor ||
+      locality_weights_map != new_locality_weights_map) {
+    ASSERT(std::all_of(current_hosts_copy->begin(), current_hosts_copy->end(),
+                       [&](const auto& host) { return host->priority() == priority; }));
+    locality_weights_map = new_locality_weights_map;
+    ENVOY_LOG(debug,
+              "EDS hosts or locality weights changed for cluster: {} current hosts {} priority {}",
+              info_->name(), host_set.hosts().size(), host_set.priority());
+    // lb 重建
+    priority_state_manager.updateClusterPrioritySet(priority, std::move(current_hosts_copy),
+                                                    hosts_added, hosts_removed, absl::nullopt,
+                                                    overprovisioning_factor);
+    return true;
+  }
+  return false;
+```
+
+1. locality_weight_map发生变化
+2. overprovisioning_factor发生变化
+3. host发生变更(新增、删除)，host没有变更，但是有一些信息发生了变化)
+
+Host信息发生变化
+
+  1. host优先级变化
+  2. host metadata变化
+  3. host配置的健康地址发生了变化
+
+这些都会导致lb重建，需要更新priorityset，即使没有任何机器发生变化
+
+5. lb重建和priority set更新
+
+通过priority_state_manager的updateClusterPrioritySet方法可以更新priorityset并重建lb
+
+```cpp
+    priority_state_manager.updateClusterPrioritySet(priority, std::move(current_hosts_copy),
+                                                    hosts_added, hosts_removed, absl::nullopt,
+                                                    overprovisioning_factor);
+```
+
+
+这个方法主要做了几件事:
+
+1. 根据locality weight map还有是否开启zone aware路由来构建LocalityWeights lb
+2. 按照locality纬度将机器组织起来，并最终构建HostsPerLocalityImpl
+3. 调用priorityset的updateHosts方法更新priority set，并传入计算出来的新增、和删除host用来进行通知
+
+
+5. 处理健康检查

@@ -121,6 +121,7 @@ fn main() {
     }
 }
 ```
+
 find方法返回的就是`Option<usize>`，如果成功找到就返回对应的位置，否则就返回`None`，类比于其他语言可能就是通过返回一个`-1`来表示没有找到。
 这种通过match模式匹配的方式显得代码非常臃肿，我们希望可以通过一些简单的方法来实现错误处理。
 
@@ -178,7 +179,7 @@ fn main() {
 
 4. `map_or`
 
-需要提供一个默认值，当Option是None的时候，就会返回这个默认值，此外还需要提供一个callback，用于当Option是Some的时候进行回调处理。
+需要提供一个默认值，当Option是None的时候，就会返回这个默认值，此外还需要提供一个callback，用于当Option是Some的时候进行回调处理
 
 ```rust
     pub fn map_or<U, F: FnOnce(T) -> U>(self, default: U, f: F) -> U {

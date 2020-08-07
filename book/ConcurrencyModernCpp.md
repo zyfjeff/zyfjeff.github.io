@@ -103,12 +103,12 @@ wait-free首先是一个lock-free算法，但是进行了加强，线程在有�
 保证对相同的shared_ptr变量的读写是原子的，是线程安全的，默认的shared_ptr不是线程安全的。
 
 
-* sequenced-before、happens-before、synchronizes-with(=inter-thread happens-before)、release-sequence
+* sequenced-before、happens-before、synchronizes-with(=inter-thread happens-before)、release-sequence、Carries dependency
 
-如果一个操作happens-before另一个操作，那么意味着第一个操作的结果对第二个操作可见，而且第一个操作的执行顺序将排在第二个操作的前面。 两个操作之间存在happens-before关系，
+happens-before表示跨线程之间的操作先后顺序，如果一个操作happens-before另一个操作，那么意味着第一个操作的结果对第二个操作可见，而且第一个操作的执行顺序将排在第二个操作的前面。 两个操作之间存在happens-before关系，
 sequenced-before 指的同一线程下，代码上的顺序关系，顺序一致性模型下，sequenced-before等于happend-before，这是这种内存模型可以保证的。
 synchronizes-with则是跨线程之间的关系，被称之为线程内的happens-before关系。但是happens-before而言，synchronizes-with存在同步的语义，
-
+Carries dependency 同一个线程内表达式A sequenced-before表达式B，并且表达式B的值是受表达式A的影响的一种关系，称之为Carries depenndency。
 
 > happends-before具备传递性
 
@@ -181,9 +181,17 @@ Fence分为三类:
 ![acquire-release-fence](../images/acquire-release.jpg)
 
 
-
-
 ![acquire-release-fence](../images/fence.jpg)
+
+
+
+* Thread-safe Initialisation
+
+1. 常量表达式
+2. 结合`std::call_once`、`std::once_flag`
+3. static变量结合block scope
+
+
 
 * Fire and Forget
 
@@ -204,6 +212,7 @@ int main(){
     std::cout << "first thread" << std::endl;
   });
 
+  // 返回的future析构会等到线程执行完毕再继续往下执行
   std::async(std::launch::async, []{
     std::this_thread::sleep_for(std::chrono::seconds(1));
     std::cout << "second thread" << std::endl;}
@@ -212,6 +221,11 @@ int main(){
   std::cout << "main thread" << std::endl; std::cout << std::endl;
 }
 ```
+
+
+* `std::current_exception()` 获取当前异常信息
+* `std::make_exception_ptr(std::runtime_error("error msg"))` 创建异常
+
 
 
 * ThreadSanitizer `-fsanitize=thread`

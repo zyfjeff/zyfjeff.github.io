@@ -1,78 +1,16 @@
 ## 语法基础
 
 
-* rust中的数组是存放在栈上的，可以直接访问，不需要通过指针来计算。
+* 常见的属性
+  1. `#[allow(non_camel_case_types)]`   // 允许非驼峰命名，默认情况下，类型名需要是驼峰类型，否则会有警告
+  2. `#![allow(overflowing_literals)]`
 
-* Format格式化输出
+* (TODO)为什么`Cell`要求类型必须是Copy的，而不是Clone?
 
-```rust
-/// nothing ⇒ Display
-/// ? ⇒ Debug
-/// x? ⇒ Debug with lower-case hexadecimal integers
-/// X? ⇒ Debug with upper-case hexadecimal integers
-/// o ⇒ Octal
-/// x ⇒ LowerHex
-/// X ⇒ UpperHex
-/// p ⇒ Pointer
-/// b ⇒ Binary
-/// e ⇒ LowerExp
-/// E ⇒ UpperExp
-```
-
-* 通过type可以给类型取别名，但是别名的名字必须是`CamelCase`驼峰格式否则编译器会产生警告，通过`#[allow(non_camel_case_types)]`可以关闭编译器的警告
-
-* rust使用()来表示空值，大小是0，是unit type的唯一值，用来表示一个函数或者一个表达式没有返回任何值，()和其他语言中的null不一样，()不是值。
-
-* `self`(this指针)、`Self`(类型本身)
-
-* 没有receive，或者说receive的类型是`&Self|Self`，但是只要参数的名字不是self，就是静态方法，就不能使用`.`号来调用
-
-* `std::mem::drop` 可以立即析构一个对象语义的变量(本质上是将其移动到函数作用域内)
-
-* `<T as TraitName>::item` Fully Qualified Syntax提供一种无歧义的函数调用语法
-
-* `trait Derived:Base{}` 等同于 `trait Derived where Self:Base{}`
-
-* 偏序(`std::cmp::PartialOrd`)和全序(`std::cmp::Ord`)，浮点数不符合(NaN的存在，浮点数无法排序)偏序关系，不满足反对称、传递性、完全性
-
-* `std::ops::Index trait`用于实现索引操作，`std::ops::IndexMut trait`用于实现索引写操作
-
-* `@符号绑定变量`，用来获取到match的值
-
-* 带有析构函数的类型都是不能满足Copy语义的
-
-* 为什么`Cell`要求类型必须是Copy的，而不是Clone
-
-* `#![allow(overflowing_literals)]` 关闭
-
-因为Cell::get的时候，返回的是一个新的实例，如果是clone的话，会导致调用clone方法，而clone方法要求传递一个引用，那么如果用户自定义了clone方法
-就可以通过这个方法拿到内部的数据的引用。
-
-* 有`where T:‘static`的约束，意思则是，类型T里面不包含任何指向短生命周期的借用指针，意思是要么完全不包含任何借用，要么可以有指向`‘static`的借用指针。
-
-* Rust中默认的“取引用”、“解引用”操作是互补抵消的关系， 互为逆运算。但是，在Rust中，只允许自定义“解引用”，不允许自定义“取引用”。
+* (TODO)Rust中默认的“取引用”、“解引用”操作是互补抵消的关系， 互为逆运算。但是，在Rust中，只允许自定义“解引用”，不允许自定义“取引用”。
   如果类型有自定义“解引用”，那么对它执行“解引用”和“取引用”就不再是互补抵消的结果了。先`&`后`*`以及先`*`后`&`的结果是不同的。
 
-* match后面的变量不会自动调用defer
-
-```rust
-
-fn main() {
-  let s = String::new();
-  match &s {
-    "" => {}
-    _ => {} }
-  }
-```
-
-可以改成下面几种形式，来主动解引用:
-
-1. `match &*s`
-2. `match s.as_ref`
-3. `match s.borrow`
-4. `match &s[..]`
-
-* 函数参数直接解构
+* 函数参数可以直接解构作为一个个独立参数
 
 ```rust
 struct T {
@@ -91,7 +29,6 @@ fn test(
 ```
 
 * Closure 默认是引用捕获，可以通过move来做take Ownership，但是实际上上并不一定是move，有可能是copy
-* Closure Traits
 
 ```rust
 pub trait Fn<Args> : FnMut<Args> {
@@ -1331,13 +1268,25 @@ tempdir = "0.3"
 
 
 
-
-
 ## attribute
 
 This RFC introduces the #[non_exhaustive] attribute for enums and structs, which indicates that more variants/fields may be added to an enum/struct in the future.
 Adding this hint to enums will force downstream crates to add a wildcard arm to match statements, ensuring that adding new variants is not a breaking change.
 Adding this hint to structs or enum variants will prevent downstream crates from constructing or exhaustively matching, to ensure that adding new fields is not a breaking change.
+
+
+## 技巧
+
+```
+pub fn write_record<I, T>(&mut self, record: I) -> csv::Result<()>
+    // 具备迭代器的能力，并且满足AsRef<[u8]>，
+    where I: IntoIterator<Item=T>, T: AsRef<[u8]>
+{
+    // implementation elided
+}
+```
+
+* The AsRef<[u8]> bound is useful because types like `String`, `&str`, `Vec<u8>` and `&[u8]` all satisfy it.
 
 
 ## Link
