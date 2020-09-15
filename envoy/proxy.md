@@ -980,8 +980,8 @@ void PrioritySetImpl::updateHosts(uint32_t priority, UpdateHostsParams&& update_
 
 > 通过BatchUpdateScope进行update的，就是batch_update，是通过一个PriorityStateManagle来进行一次性更新的。
 
-* runUpdateCallbacks 只在HostSet中的主机完整的添加和删除才会触发，这里面的callback是通过addMemberUpdateCb来添加的
-* runReferenceUpdateCallbacks 是在HostSet中的主机进行局部的添加和删除才会触发，这里面的callback是通过addPriorityUpdateCb来添加的
+* runUpdateCallbacks 只在HostSet中的主机完整的添加和删除才会触发，这里面的callback是通过addMemberUpdateCb来添加的，不区分优先级。
+* runReferenceUpdateCallbacks 是在HostSet中的主机进行局部的添加和删除才会触发，这里面的callback是通过addPriorityUpdateCb来添加的，是区分优先级的。
 
 
 * `PrioritySetImpl::BatchUpdateScope::updateHosts`

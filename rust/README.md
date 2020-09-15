@@ -1297,3 +1297,30 @@ pub fn write_record<I, T>(&mut self, record: I) -> csv::Result<()>
 * [Too Many Linked Lists](https://rust-unofficial.github.io/too-many-lists/)
 * [Interior mutability in Rust: what, why, how?](https://ricardomartins.cc/2016/06/08/interior-mutability)
 * [& vs. ref in Rust patterns](http://xion.io/post/code/rust-patterns-ref.html)
+* [Clear explanation of Rust’s module system](http://www.sheshbabu.com/posts/rust-module-system/)
+* [Understanding Rust slices](https://codecrash.me/understanding-rust-slices)
+* [Implement a bloom filter](https://onatm.dev/2020/08/10/let-s-implement-a-bloom-filter/)
+* [Frustrated? It's not you, it's Rust](https://fasterthanli.me/articles/frustrated-its-not-you-its-rust)
+
+
+## TODO
+1. https://github.com/stjepang/polling(done)
+2. https://fasterthanli.me/articles/surviving-rust-async-interfaces
+3. https://github.com/joshtriplett/async-pidfd
+4. https://github.com/rust-lang/async-book(Done)
+5. https://nick.groenen.me/posts/rust-error-handling/
+6. https://stackoverflow.com/questions/63164973/why-does-rust-allow-calling-functions-via-null-pointers
+7. https://blog.carlosgaldino.com/writing-a-file-system-from-scratch-in-rust.html
+8. https://tokio.rs/tokio/tutorial
+9. https://fasterthanli.me/articles/small-strings-in-rust
+10. https://sokoban.iolivia.me/c01-00-intro.html
+11. https://github.com/cloudhead/popol
+12. http://www.sheshbabu.com/posts/rust-module-system/ (Done)
+13. https://createlang.rs/
+14. https://blog.thoughtram.io/string-vs-str-in-rust/
+15. https://fasterthanli.me/articles/working-with-strings-in-rust
+16. https://github.com/stjepang/smol
+17. https://dev.to/anshulgoyal15/a-beginners-guide-to-grpc-with-rust-3c7o
+18. https://cfsamson.github.io/books-futures-explained/introduction.html
+19. http://sled.rs/errors
+20. https://fasterthanli.me/articles/frustrated-its-not-you-its-rust (done)
