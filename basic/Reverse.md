@@ -1,3 +1,90 @@
+## 汇编基础
+
+栈是从高地址向低地址生长的，栈底在高地址，栈顶在低地址，rsp始终指向栈顶，每次push的时候都会导致rsp的地址减少。
+GCC把每一次的函数调用都转换为一个栈帧，简单来说，每一个栈帧对应一个函数。栈帧可以理解成栈中的一块连续区域。
+而rbp寄存器则是指向这块栈帧的启始位置，
+
+```assembly
+pushq   %rbp
+movq    %rsp, %rbp
+subq    $16, %rsp
+```
+
+在每一个函数调用的开始处我们都会发现上面类似的代码，将rbp放入堆栈中，然后用rbp保存最新的栈顶地址，可以理解rbp其实是对
+
+![stack frame](../images/stack-frame.png)
+
+
+Linux寄存器传递参数顺序
+%rdi、%rsi、%rdx，%rcx、%r8、%r9
+
+
+```c
+#include <stdio.h>
+
+int func1(int args1, int args2, int args3) {
+  int ret = args1 + args2 + args3;
+  return ret;
+}
+
+int main() {
+  int args1 = 10;
+  int args2 = sizeof(int);
+  int args3 = sizeof(char);
+
+  int ret = func1(args1, args2, args3);
+  printf("%d\n", ret);
+  return 0;
+}
+```
+
+
+```asm
+func1:
+	pushq	%rbp              ; 新的栈帧，把上一个栈帧的rbp寄存器保存起来，新的栈帧要使用rbp来访问堆栈
+	movq	%rsp, %rbp        ; 保存新的栈顶
+	movl	%edi, -20(%rbp)   ; 获取参数，并保存在堆栈上
+	movl	%esi, -24(%rbp)   ; 继续保存在堆栈上
+	movl	%edx, -28(%rbp)   ; 继续保存在堆栈上
+	movl	-20(%rbp), %edx   ;
+	movl	-24(%rbp), %eax
+	addl	%eax, %edx        ; 实现加法
+	movl	-28(%rbp), %eax
+	addl	%edx, %eax
+	movl	%eax, -4(%rbp)    ; 返回回去
+	movl	-4(%rbp), %eax
+	popq	%rbp
+	ret
+
+main:
+  // 保存rbp寄存器，然后使用rbp保存新的栈顶寄存器，
+  pushq	%rbp
+	movq	%rsp, %rbp
+  // 开辟一段栈空间，用来保存局部变量
+	subq	$16, %rsp
+  // 通过rbp来定位到对应栈空间
+	movl	$10, -4(%rbp) ; args1，存放10
+	movl	$4, -8(%rbp)  ; args2, 存放4
+	movl	$1, -12(%rbp) ; args3, 存放1
+	movl	-12(%rbp), %edx  // 第三个参数
+	movl	-8(%rbp), %ecx
+	movl	-4(%rbp), %eax
+	movl	%ecx, %esi  // 第二个参数
+	movl	%eax, %edi  // 第一个参数
+	call	func1       // 函数调用
+	movl	%eax, -16(%rbp)
+	movl	-16(%rbp), %eax
+	movl	%eax, %esi
+	movl	$.LC0, %edi
+	movl	$0, %eax
+	call	printf
+	movl	$0, %eax
+	leave
+	ret
+```
+
+
+
 
 ## 基本汇编分析
 

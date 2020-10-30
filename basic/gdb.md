@@ -1,10 +1,8 @@
 
 
+# Tips
 
 ## Enable pretty print
-
-
-### Tips
 
 1. set print object on
 2. ptype obj/class/struct
@@ -12,6 +10,7 @@
 4. set print vtbl on
 
 
+## x command
 x command
 Displays the memory contents at a given address using the specified format.
 
@@ -52,3 +51,10 @@ g - giant word (64-bit value)
 
 Length
 Specifies the number of elements that will be displayed by this command.
+
+## gdb history
+set history save on
+set history size 10000
+set history filename ~/.gdb_history
+
+## Dump memory

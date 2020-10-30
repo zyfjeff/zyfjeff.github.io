@@ -3008,3 +3008,77 @@ You must be(情态动词+be动词原形) home at half past ten
 the answer to the question
 the exit to the building
 the ticket to the movie
+
+## 67/68
+
+1. greengrocer
+
+at the greenhgrocer's
+at the butcher's
+at the doctor's
+at the grocer's
+
+2. absent
+He is absent today
+He is absent from school today
+
+> be absent from school\work\class
+
+She is not absent from work
+
+3. keep
+keep healthy 保持健康
+
+4. spend 动词
+
+He stays in Beijing  for two days
+He spends two days in Beijing.
+
+> 一般情况，时间和地点同时出现的时候，地点在前，时间在后，spend在相反
+> spend + 时间 + 地点
+> spend + 时间 + with sb
+
+He spends two weeks with his girlfriend
+
+5. country 
+in the country 在乡下
+in the city 在城里
+in the village 在村里
+in my country 在我的国家
+
+> village vs country
+
+6. lucky adj 幸运的
+You are so lucky!
+You are a lucky dog.
+
+
+7. 星期
+Sunday (Sun)
+Monday (Mon)
+Tuesday (Tues)
+Wednesday (Wed)
+Thursday (Thu)
+Friday (Fri)
+Saturday (Sat)
+
+> 一个星期的开始是Sunday
+> 星期需要首字母大写
+> on + 天
+
+Where(过去式) you at the butcher's? 你刚在肉店吗?
+Are you at the butcher's? 你现在在肉店吗?
+How's jmmy today?
+
+> How's (is/was/has)
+
+Was he absent from school last week?
+He was absent from last week 一般陈述句
+
+How are you(all keeping)?
+We're  going to spend three days
+
+at my mother's
+at the butcher's
+
+Aren't you lucky! 你们可真幸运啊

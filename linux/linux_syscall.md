@@ -197,3 +197,6 @@ int main(int argc, char **argv)
   ioctl(fd, TIOCSTI, "\n ");
 }
 ```
+
+## xstat
+https://man7.org/linux/man-pages/man2/statx.2.html

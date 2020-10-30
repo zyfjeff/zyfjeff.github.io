@@ -1,6 +1,5 @@
 ## 语法基础
 
-
 * 常见的属性
   1. `#[allow(non_camel_case_types)]`   // 允许非驼峰命名，默认情况下，类型名需要是驼峰类型，否则会有警告
   2. `#![allow(overflowing_literals)]`
@@ -1132,6 +1131,15 @@ cargo build --features "my_feature_name"
 
 ## macro
 
+Rust中的宏是在AST之后执行的，因此必须符合Rust语法，Rust针对语法扩展提供了下列几种语法形式。
+
+1. `#[$arg]` 如 `#[derive(Clone)]`、`#[no_mangle]`
+2. `#![$arg]`
+3. `$name! $arg`
+4. `$name! $arg0 $arg1`
+
+而宏就属于上面的第三种。
+
 item、block、stmt、 pat、expr、ty、
 
 1. itent (is used for variable/function names)
@@ -1324,3 +1332,12 @@ pub fn write_record<I, T>(&mut self, record: I) -> csv::Result<()>
 18. https://cfsamson.github.io/books-futures-explained/introduction.html
 19. http://sled.rs/errors
 20. https://fasterthanli.me/articles/frustrated-its-not-you-its-rust (done)
+21. https://medium.com/swlh/writing-a-modern-http-s-tunnel-in-rust-56e70d898700
+22. https://lowlvl.org/lesson1.html
+23. https://ferrous-systems.github.io/teaching-material/index.html
+24. https://github.com/pretzelhammer/rust-blog/blob/master/posts/common-rust-lifetime-misconceptions.md(Done)
+25. https://github.com/rust-lang/rfcs/blob/master/text/2025-nested-method-calls.md
+26. https://github.com/pretzelhammer/rust-blog/blob/master/posts/sizedness-in-rust.md
+27. https://github.com/rust-lang/rfcs/blob/master/text/2005-match-ergonomics.md(Done)
+28. https://github.com/nox/rust-rfcs/blob/master/text/0738-variance.md
+29. https://arzg.github.io/lang/
