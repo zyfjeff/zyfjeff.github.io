@@ -1,6 +1,8 @@
 # C++基础
 
 
+## 为什么模版的声明和定义要放在一起?
+
 ## 为什么make_shared无法自定义删除器
 
 ## unique_ptr为什么不能和shared_ptr一样不把删除器保存在模版参数中
@@ -226,18 +228,6 @@ tv.tv_secs = secs.count();
 tv.tv_usecs = usecs.count();
 ```
 
-## 使用Gdb来dump内存信息
-
-```
-sudo gdb
-> attach 进程PID
-> i proc mappings  # 查看进程的地址空间信息 等同于 /proc/PID/maps
-> i files  # 可以看到更为详细的内存信息 等同于 /proc/PID/smaps
-> dump memory 要存放的位置 SRC DST # 把SRC到DST 地址范围内的内存信息dump出来
-
-对dump出来的内容实用strings即可查看到该段内存中存放的字符串信息了
-```
-
 ## 引用折叠和cv限制符
 
 引用折叠规则:
@@ -316,7 +306,6 @@ void f(Args&&... args) {
 ## 函数模版无法偏特化，只能全特化
 
 ## extern template
-
 
 ## 模版模版参数
 
@@ -751,95 +740,93 @@ class Consumer {
 相当于Consumer将部分能力通过Delegate的方式提供出去，让别的组件来实现，然后自己委托来调用。这个实现存在的问题就是
 Delagate的生命周期并不是由Consumer来保证的，如何确保在调用的时候，Delegate是存活的?
 
-## Mock技巧
 
-1. Mock `ClassA::Create()`
+## Type erasure
+在一些动态语言中，一个变量可以是任意类型，我们称之为duct type，
 
 
-``` cpp
 
-class AInterface;
+## 自定义迭代器
 
-class A : public A::AInterface {
- public:
-  static std::unique_ptr<A::AInterface> Create();
-};
+C++中将迭代器分为六类，分别是:
 
-class B {
- public:
-  void Method() {
-    a_ = A::Create();
-  }
- private:
-  std::unique_ptr<A::AInterface> a_;
-}
-```
+1. Input Iterator 只能顺序扫描一次，并且是只读的
+2. Output Iterator  只能顺序扫描一次，并且不能读，只能写
+3. Forward Iterator 可以顺序扫描多次，并且可读可写
+4. Bidirectional Iterator 可以双向扫描，并且可读可写
+5. Random Access Iterator 可以双向扫描、并且还支持随机访问，可读可写(逻辑上要求元素是相邻的)
+6. Contiguous Iterator  具备上升迭代器所有的特点，此外还要求内部元素在物理上是相连的(比如std::array，std::deque不具备这个特点)
 
-上面的类A通过静态方法创建实例，现在想要测试B，需要把A Mock掉。可以通过下面这种方式来Mock
+> 通过迭代器分类可以辅助算法进行性能优化，以及对输入进行校验，比如std::fill要求迭代器是Forward Iterator，如果这个时候输入的迭代器是Input Iterator/ Output Iterator
 
-```cpp
-class B {
- public:
-  void Method() {
-    a_ = Create();
-  }
-  virtual std::unique_ptr<A::AInterface> Create();
- private:
-  std::unique_ptr<A::AInterface> a_;
-};
 
-class ProdB : public B {
- public:
-  virtual std::unique_ptr<A::AInterface> Create() override {
-    return A::Create();
-  }
-};
-```
+C++17之前实现自定义迭代器都是通过`tag dispatch`的方式来实现，Forward Iterator example如下：
 
-## RAII List
+```C++
+#include <iterator> // For std::forward_iterator_tag
+#include <cstddef>  // For std::ptrdiff_t
 
-```cpp
-// RAII helper class to add an element to an std::list on construction and erase
-// it on destruction, unless the cancel method has been called.
-template <class T> class RaiiListElement {
+class Integers {
 public:
-  RaiiListElement(std::list<T>& container, T element) : container_(container), cancelled_(false) {
-    it_ = container.emplace(container.begin(), element);
-  }
-  virtual ~RaiiListElement() {
-    if (!cancelled_) {
-      erase();
+  struct Iterator {
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = int;
+    using pointer = int*;
+    using reference = int&;
+
+    Iterator(pointer ptr) : ptr_(ptr) {}
+    reference operator*() { return *ptr_; }
+    pointer operator->() { return ptr_; }
+
+    Iterator& operator++() {
+      ptr_++;
+      return *this;
     }
-  }
 
-  // Cancel deletion of the element on destruction. This should be called if the iterator has
-  // been invalidated, eg. if the list has been cleared or the element removed some other way.
-  void cancel() { cancelled_ = true; }
+    Iterator operator++(int) {
+      Iterator tmp = *this; ++(*this); return tmp;
+    }
 
-  // Delete the element now, instead of at destruction.
-  void erase() {
-    ASSERT(!cancelled_);
-    container_.erase(it_);
-    cancelled_ = true;
-  }
+    friend bool operator==(const Iterator& a, const Iterator& b) {
+      return a.ptr_ == b.ptr_;
+    }
 
+    friend bool operator!=(const Iterator& a, const Iterator& b) {
+      return a.ptr_ == b.ptr_;
+    }
+
+    Iterator begin() { return Iterator(&data_[0]); }
+    Iterator end()   { return Iterator(&data_[200]); } // 200 is out of bounds
+
+    private:
+      pointer ptr_;
+  };
 private:
-  std::list<T>& container_;
-  typename std::list<T>::iterator it_;
-  bool cancelled_;
+  int data_[200];
 };
+
+
 ```
 
+一个典型的迭代器预期要有下面几个属性:
+
+1. `iterator_category`  迭代器所属于的类型，上文中提到的六类迭代器
+2. `difference_type` 用于标识迭代器步长，通常我们的迭代器都是指针，因此选用`std::ptrdiff_t`就好了。
+3. `value_type` 迭代器要迭代的类型，例如上面的这个例子中我们的类型是`int`
+4. `pointer`  定义一个指向迭代类型的指针，上面的例子中是`int*`
+5. `reference` 定义一个迭代类型的引用，上面的例子中是`int&`
 
 
-## 线程/进程模型总结
+> 迭代器本身必须是可构造、Copy构造、Copy赋值、析构、和可交换的。
 
-## 网络模型总结
+对于一个Forward Iterator来说，最基本要实现`*iterator`、`iterator->x`、`++iterator`、`iterator++`、`iterator_a == iterator_b` 这几类操作
 
+
+Ref: https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
 
 
 ## 常用链接
 
 1. https://godbolt.org/
 2. https://preshing.com/
-3.

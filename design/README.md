@@ -171,7 +171,8 @@ class StrategizedLocking {
 
 
 ## Active Object
-Active Object 设计模式的本质是解耦合方法的调用 (Method invocation) 与方法的执行 (Method execution)，方法调用发生在调用者线程上下文中，而方法的执行发生在独立于调用者线程的 Active Object 线程上下文中。并且重要的一点是，该方法与其它普通的对象成员方法对于调用者来说，没有什么特别的不同。从运行时的角度来看，这里涉及到两类线程，一个是调用者线程，另外一个是 Active Object 线程
+Active Object 设计模式的本质是解耦合方法的调用 (Method invocation) 与方法的执行 (Method execution)，方法调用发生在调用者线程上下文中，而方法的执行发生在独立于调用者线程的 Active Object 线程上下文中。
+并且重要的一点是，该方法与其它普通的对象成员方法对于调用者来说，没有什么特别的不同。从运行时的角度来看，这里涉及到两类线程，一个是调用者线程，另外一个是 Active Object 线程
 
 ```cpp
 #include <algorithm>

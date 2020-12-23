@@ -32,8 +32,14 @@ end
 5. handle SIGUSR1 nostop/ignore
 
 
+## 使用Gdb来dump内存信息
 
-##  内存dump
+```
+sudo gdb
+> attach 进程PID
+> i proc mappings  # 查看进程的地址空间信息 等同于 /proc/PID/maps
+> i files  # 可以看到更为详细的内存信息 等同于 /proc/PID/smaps
+> dump memory 要存放的位置 SRC DST # 把SRC到DST 地址范围内的内存信息dump出来
 
-1. info proc mapping
-2. dump memory /tmp/data start end
+对dump出来的内容实用strings即可查看到该段内存中存放的字符串信息了
+```

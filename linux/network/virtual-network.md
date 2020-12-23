@@ -26,3 +26,5 @@ $ ip link set vxlan0 up
 ```shell
 10.20.1.0/24 dev vxlan0  proto kernel  scope link  src 10.20.1.2
 ```
+
+https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking/

@@ -3,7 +3,7 @@
 > Originally published as totw/3 on 2012-05-11
 > Updated 2017-09-18; revised 2018-01-22
 
-当一个reviewer说"不要使用string的连接操作，这不高效"，通常会让提交代码的人很惊讶。`std::string::operator+`是如何低效的呢? 难道不难弄错?
+当一个reviewer说"不要使用string的连接操作，这不高效"，通常会让提交代码的人很惊讶。`std::string::operator+`是如何低效的呢? 是不是很难弄错?
 
 事实证明，这种低效并不明显，这两个片段在实际执行中有着接近相同的执行时间:
 
@@ -31,7 +31,7 @@ std::string baz = LongString3();
 std::string foobar = absl::StrCat(foo, bar, baz);
 ```
 
-当我们分解一下`foo + bar + baz`表达式中发生的情况就可以理解上面两种情况有所不同的原因了。在C++中没有三个参数的操作符，所以必须要执行二次`string::operator+`操作才能完成三个字符串的相加。在两次调用之间会构造出一个临时的字符串因此`std::string foobar = foo + bar + baz`等同如下:
+当我们分解一下`foo + bar + baz`表达式中发生的情况，就可以理解上面两种情况有所不同的原因了。在C++中没有三个参数的操作符，所以必须要执行二次`string::operator+`操作才能完成三个字符串的相加。在两次调用之间会构造出一个临时的字符串因此`std::string foobar = foo + bar + baz`等同如下:
 
 ```c++
 std::string temp = foo + bar;

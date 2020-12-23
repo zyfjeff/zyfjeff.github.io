@@ -1,7 +1,6 @@
 
 proxy-wasm-host、proxy-wasm-cpp-sdk、envoy-wasm
 
-
 ## To implement a WASM filter
 
 1. Implement a root context class which inherits base root context class
@@ -401,11 +400,6 @@ pub extern "C" fn proxy_on_delete(context_id: u32) {
 ```
 
 
-
-
-
-
-
 基本概念:
 
 **Wasm::Context** 是Envoy和wasm插件的桥梁，Context继承了Envoy内部各个扩展点的接口，并且在每一个Envoy的扩展点上
@@ -510,9 +504,6 @@ class ContextBase : public RootInterface,
 **WasmBase**
 
 **WasmVM**  一个Wasm VM需要实现的接口，
-
-
-
 
 
 

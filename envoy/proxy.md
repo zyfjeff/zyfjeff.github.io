@@ -3163,6 +3163,12 @@ Host信息发生变化
 1. 根据locality weight map还有是否开启zone aware路由来构建LocalityWeights lb
 2. 按照locality纬度将机器组织起来，并最终构建HostsPerLocalityImpl
 3. 调用priorityset的updateHosts方法更新priority set，并传入计算出来的新增、和删除host用来进行通知
+4. 处理健康检查
 
 
-5. 处理健康检查
+## 连接池
+
+
+
+## Extension Config Discovery Service
+

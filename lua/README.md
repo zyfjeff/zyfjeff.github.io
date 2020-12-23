@@ -1,4 +1,4 @@
-## Lua基础
+## Lua语言基础
 
 * 字符串连接用 `..`
 * 字符串长度用 `#`
@@ -9,6 +9,18 @@
 * userdata是一种用户自定义类型，由应用程序或者C++创建的类型，可以将任意C++的任意数据类型的数据转存储在Lua变量中
 * ipairs和pairs都是迭代器，其中ipars只迭代索引类型的元素，pairs则是所有
 * module机制本质上就是一个module表，将需要暴露出来的方法填入module表中即可
+* lua中的goto语句存在一些限制
+  1. 不能jump到block中，因为label如果在block中，对外就不可见了
+  2. 不能跳出函数
+  3. 不能jump到一个本地变量的作用域中
+
+* repeat关键字
+
+* return 关键字
+
+For syntactic reasons, a return can appear only as the last statement of a block: in other words, 
+as the last statement in our chunk or just before an end, an else, or an until. For instance, in the next example, 
+return is the last statement of the then block:
 
 ## Lua原理
 
@@ -96,3 +108,78 @@ Lua虚拟机指令可以分为四类、分别对应四种编码模式:iABC、iAB
 lua_State是对解释器状态的封装，可以在多个解释器实例之间进行切换，使用lua_newstate类创建lua_State实例
 
 Lua中一共支持8种数据类型，分别是nil、布尔、数字、字符串、表、函数、线程、用户数据
+
+
+
+## Lua C API
+
+Lua与C/C++交互的核心在于虚拟栈，为什么这么说呢? 在lua中我们可以很简单的通过`t[k] = v`来操作一个表，并且k和v是任意lua类型，
+但是在C中要想实现这个能力就比较困难了，C中的类型都是静态的，我们可能需要提供不同lua类型的重载函数才能实现这个表的赋值操作。
+或者是提供一个复合类型，他可以表示任何lua类型。
+
+
+```lua
+lua_Integer luaL_checkinteger (lua_State *L, int arg);
+检查函数的第 arg 个参数是否是一个整数（或是可以被转换为一个整数）并以 lua_Integer 类型返回这个整数值。
+
+void luaL_argcheck (lua_State *L,
+                    int cond,
+                    int arg,
+                    const char *extramsg);
+检查 cond 是否为真。如果不为真，以标准信息形式抛出一个错误（参见 luaL_argerror）。
+```
+
+
+```lua
+void lua_pushnil(lua_State *L);
+void lua_pushboolea(lua_State *L, int bool);
+void lua_pushnumber(lua_State *L, lua_Number n);
+void lua_pushinteger(lua_State *L, lua_Integer n);
+void lua_pushlstring(lua_State *L, const char *s, size_t len); 
+void lua_pushstring(lua_State *L, const char *s);
+
+// 默认的lua栈大小是20，通过LUA_MINISTACK定义
+int lua_checkstack (lua_State *L, int sz);
+
+// 对lua_checkstack的封装，不返回错误码，会返回错误内容
+void luaL_checkstack (lua_State *L, int sz, const char *msg);
+
+
+// 检查堆栈指定位置的值是否是指定类型
+int lua_is* (lua_State *L, int index);
+```
+
+```c
+typedef int (*lua_CFunction) (lua_State *L);
+```
+
+
+* 用来创建一个`lua_State`，一个`lua_State`就表示一个lua虚拟机，所有的lua API的第一个参数都是`lua_State`
+```lua
+lua_open()  //lua5.1的语法
+luaL_newstate() //最新的用法
+```
+
+* 用来加载标准库
+```lua
+luaL_openlibs
+```
+
+* 运行lua脚本
+
+```lua
+int luaL_dostring (lua_State *L, const char *str);
+Loads and runs the given string. It is defined as the following macro:
+
+     (luaL_loadstring(L, str) || lua_pcall(L, 0, LUA_MULTRET, 0))
+```
+
+
+
+```lua
+LUA_GCCOUNT
+LUA_GCCOUNTB
+
+lua_gc
+```
+
