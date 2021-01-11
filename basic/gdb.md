@@ -8,7 +8,7 @@
 2. ptype obj/class/struct
 3. set print pretty on
 4. set print vtbl on
-
+5. set print elements 0 输出全部元素
 
 ## x command
 x command

@@ -1,6 +1,13 @@
-## 负载均衡算法
+# 负载均衡算法
 
-1. Nginx: smooth weighted round-dobin
+[Load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing))根据Wiki的定义，负载均衡指的是在一组资源（计算单元）上分配一组任务的过程，目的是使它们的整体处理效率更高。
+负载均衡算法可以优化每个任务的响应时间，避免在其他计算节点处于空闲状态时不均匀地使计算节点过载。常见的负载均衡算法有随机、轮询、最少连接等，这些算法还可以结合权重。在结合权重的情况下如何能高效的
+选取一个节点，并且保证负载均衡是衡量算法的重要特征，本文主要关注一些开源项目中使用的基于权重的一些高效负载均衡算法的分析。
+
+## Smooth weighted round-robin
+
+这是Nginx使用的基于权重的轮询算法，名为Smooth，顾名思义该算法相比于其它加权轮询（WRR）算法多一个 smooth（平滑）的特性。
+这个算法的核心思想是，每次选择一台权重最大的机器后，用这个机器的权重减去总的权重，下次选择的时候
 
 ```plain
 Upstream: smooth weighted round-robin balancing.
@@ -96,3 +103,4 @@ Reference:
 [SwissTable](https://abseil.io/blog/20180927-swisstables)
 [hashbrown](https://blog.waffles.space/2018/12/07/deep-dive-into-hashbrown/)
 [Benchmark of major hash maps implementations](https://tessil.github.io/2016/08/29/benchmark-hopscotch-map.html)
+[VNSWRR](https://www.infoq.cn/article/sebuh0k6ji*ytfqzcihb)

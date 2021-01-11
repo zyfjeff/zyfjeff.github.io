@@ -1,46 +1,46 @@
 
 # Programming Kubernetes
 
-## Kubernetes提供的扩展机制:
+## Chapter1. Introduction
 
-* `cloud-controller-manager` 对接各个云厂商提供的能力，比如Load Balancer、VM等
-* `Binary kubectl plug-ins` 通过二进制扩展kubelet子命令
-* `Binary kubelet plug-ins` 通过二进制扩展网络、存储、容器运行时等
-* `Access extensions in the API server` 比如dynamic admission control with webhooks
-* `Custom resources` 和 `custom controllers`
-* `Custom API servers`
-* Scheduler externsions
-* Authentication with webhooks
+* Kubernetes Native Application
+
+何为Kubernetes-native的Application，感知是跑在Kubernetes上，并依靠Kubernetes提供的API(指的是与API Server直接交互来查询资源的状态或者更新这些资源的状态)来进行编程的Application，被称之为Kubernetes Native Application。
 
 
-## controller
+* Kubernetest 扩展系统
+kubernetest提供了很强大的扩展系统，通常来说有多种方式来实现扩展，下面是一些常见的Kubernetes的扩展点，更多细节可以看[extending-kubernetes-101](https://speakerdeck.com/mhausenblas/extending-kubernetes-101):
 
-“a controller implements a control loop, watching the shared state of the cluster through the API server and making changes in an attempt to move the current state toward the desired state.”
+	* `cloud-controller-manager` 对接各个云厂商提供的能力，比如Load Balancer、VM等
+	* `Binary kubectl plug-ins` 通过二进制扩展kubelet子命令
+	* `Binary kubelet plug-ins` 通过二进制扩展网络、存储、容器运行时等
+	* `Access extensions in the API server` 比如dynamic admission control with webhooks
+	* `Custom resources` 和 `custom controllers`
+	* `Custom API servers`
+	* Scheduler externsions，通过webhook来实现自己的调度器
+	* Authentication with webhooks
 
-![controll-loop](images/controll-loop.jpg)
+* Controll Loop
+Kubernetest的controller的实现本质上是一个control loop，通过API server来watch某种资源的状态，然后根据当前状态向着终态走。
 
-1. 读取资源的状态(更可取的方式是通过事件驱动的方式来读取)
-2. 改变集群中对象的状态，比如启动一个POD、创建一个网络端点、查询一个cloud API等
-3. 通过API server来更新Setp1中的资源状态(Optimistic Concurrency)
-4. 循环重复，返回到Setp1
+> a controller implements a control loop, watching the shared state of the cluster through the API server and making changes in an attempt to move the current state toward the desired state
+> Kubernetes并不会根据当前的状态和预期的状态来计算达到预期状态所需要的命令序列，从而来实现所谓的声明式系统，相反Kubernetes仅仅会根据当前的状态计算出下一个命令，如果没有可用的命令，则Kubernetes就达到稳态了
 
-核心数据结构:
+典型的Control loop的流程如下:
 
-1. informers 提供一种扩展、可持续的方式来查看资源的状态，并实现了resync机制(强制执行定期对帐，通常用于确保群集状态和缓存在内存中的假定状态不会漂移)
-2. Work queues 用于将状态变化的事件进行排队处理，便于去实现重试(发生错误的时候，重新投入到队列中)
+	1. 读取资源的状态(更可取的方式是通过事件驱动的方式来读取)
+	2. 改变集群中对象的状态，比如启动一个POD、创建一个网络端点、查询一个cloud API等
+	3. 通过API server来更新Setp1中的资源状态(Optimistic Concurrency)mak
+	4. 循环重复，返回到Setp1
 
+![controll-loop](../images/controll-loop.jpg)
 
-Kubernetes does not determine a calculated, coordinated sequence of commands to execute based on the current state and the desired state.
-
-Kubernetes并不会根据当前的状态和预期的状态来计算达到预期状态所需要的命令序列，从而来实现所谓的声明式系统，相反Kubernetes仅仅会根据当前的状态计算出下一个命令，如果没有可用的命令，则Kubernetes就达到稳态了
-
-
-Ref:
-* [The Mechanics of Kubernetes](https://medium.com/@dominik.tornow/the-mechanics-of-kubernetes-ac8112eaa302)
-* [A deep dive into Kubernetes controllers](https://engineering.bitnami.com/articles/a-deep-dive-into-kubernetes-controllers.html)
+Controller 核心数据结构:
+	1. informers 提供一种扩展、可持续的方式来查看资源的状态，并实现了resync机制(强制执行定期对帐，通常用于确保群集状态和缓存在内存中的假定状态不会漂移)
+	2. Work queues 用于将状态变化的事件进行排队处理，便于去实现重试(发生错误的时候，重新投入到队列中)
 
 
-## Events
+* Events
 
 Kubernetes中大量使用事件和一些松耦合的组件。其他的一些分布式系统主要是RPC来触发行为，但是Kubernetes没有这么做。
 Kubernetes控制器通过监控Kubernetes对象在API server中的改变(添加、删除、更新)等。当这些事件发生，Kubernetes控制器执行对应的业务逻辑。
@@ -58,57 +58,54 @@ Kubernetes控制器通过监控Kubernetes对象在API server中的改变(添加�
 9. replica set控制器发现POD的状态为terminated，于是删除POD对象，重新创建一个新的
 10. 到此结束
 
+通过上面POD创建的过程可以看出，整个过程中有很多独立的Controller，每一个Controller就是一个control loop。
+他们之间通过informer接收到事件来触发对应的逻辑。这些事件是API Server发送给informer的。informer内部通过watche的方式得到通知。
 
-所有的controller本身是无状态的，便于水平扩展，尽管他们会去执行一些有状态的操作，Controller重启后会重放所有的事件(或者定期resync的时候)，类似event-sourcing机制
-Controllers essentially are stateless even though they perform stateful operations
-
-水平触发 + resync + optimistic concurrency 是Kubernetes 事件驱动架构的核心
-
-* Controller会定期进行resync以此来避免因为bug或者停机导致事件丢失
-* 通过乐观并发来解决并发更新的问题
-* 事件队列的优点: 解耦、背压、通过事件重放来做审计和debug
-
-![optimistic-concurrent](images/optimistic_concurrent.jpg)
+> 这里说的Event事件和Kubernetes中的Event对象是两回事，Event对象主要是给用户提供一种logging机制，用户编写的Controller可以创建Event对象来记录一些内部事件
+> 比如kubelet会通过Event对象暴露内部的生命周期事件。这些Event对象可以像其他的kubernetes对象(Pod、Deployment等)一样进行查询。这些事件对象默认只存放
+> 1个小时。1个小时候后便会从etcd中删除。
 
 
-Ref:
-* [深入浅出Event Sourcing和CQRS](https://zhuanlan.zhihu.com/p/38968012)
-* [Events, the DNA of Kubernetes](https://www.mgasch.com/post/k8sevents/)
-* [QoS, "Node allocatable" and the Kubernetes Scheduler](https://www.mgasch.com/post/sched-reconcile/)
+* Level triger vs Edge triger
 
+Kubernetes中大量依赖事件来解耦各个组件，事件的高效通知对于Kubernetes来说至关重要，典型的二种实现事件通知的机制如下:
 
-## Level triger vs Edge triger
+	* Edge-driven triggers
+	At the point in time the state change occurs, a handler is triggered—for example, from no pod to pod running.
 
+	* Level-driven triggers
+	The state is checked at regular intervals and if certain conditions are met (for example, pod running), then a handler is triggered.
 
-* “Edge-driven triggers
-At the point in time the state change occurs, a handler is triggered—for example, from no pod to pod running.
-
-* Level-driven triggers
-The state is checked at regular intervals and if certain conditions are met (for example, pod running), then a handler is triggered.”
-
-后者不具备可扩展性，本质上是polling、polling的间隔会影响controller的实时性。
-
-三种触发策略:
+水平触发不具备可扩展性，本质上是polling、polling的间隔会影响controller的实时性，边缘触发更加高效，但是如果某个Controller存在bug就会导致事件丢失，这对于
+边缘触发来说是无法接受的，而水平触发却不会存在这个问题，因为总是能够通过polling的方式获取到最终的状态。两者结合一下，事件通过边缘触发来通知，每次收到事件后通过pooling的方式
+获取到资源的最终状态，那么即使中间丢失了一个事件也无所谓，比如replica set控制器中，预期要创建3个POD，因此每次POD创建都会产生一个事件，replica set通过事件就可以知道当前状态
+和预期的状态还差多少，然后继续创建POD，如果因为网络问题导致中间丢失了一个事件，那么这就会导致创建的POD和预期的不符，这个时候如果结合水平触发，在下一次事件到来的时候主动查一下
+当前的状态，这样就可以避免了中间事件丢失导致状态不对的问题，同时也借助了边缘触发达到了高效的事件通知。但是这样仍然存在问题。如果正好是最后一个事件丢失了呢? 这样就没有机会去查询当前
+状态了。如果能够再结合定时查询就可以解决这个问题了，这个定时查询在Kubernetes中称之为resync。总结下，有三种事件通知策略：
 
 1. Edge driven trigger 没有处理事件丢失的问题
 2. Edge driven trigger + Level-driven triggers，总是去获取最新的状态(当有事件来的时候)，因此即使丢失一个事件，仍然可以通过获取最新的状态来进行业务逻辑
 3. Edge driven trigger + Level-driven triggers + resync 如果最后一个事件丢失了，后面没有事件来了，所以也不会去触发(Level-driven triggers)，这个时候需要借助resync来得到最新的状态。
 
-![event driven trigger](images/event-trigger.png)
+上面的这三种策略对应如下图:
 
-kubernetes实现了上面的第三种策略
-
-Ref:
-* [level-triggering-and-reconciliation-in-kubernetes](https://hackernoon.com/level-triggering-and-reconciliation-in-kubernetes-1f17fe30333d)
+![event driven trigger](../images/event-trigger.png)
 
 
-## Optimistic Concurrency
+kubernetes实现了上面的第三种策略，通过这种方式来实现高效的事件通知，如果你想知道更多关于水平触发以及reconcile请参考[level-triggering-and-reconciliation-in-kubernetes](https://hackernoon.com/level-triggering-and-reconciliation-in-kubernetes-1f17fe30333d)
 
-“Our solution is a new parallel scheduler architecture built around shared state, using lock-free optimistic concurrency control, to achieve both implementation extensibility and performance scalability. 
-This architecture is being used in Omega, Google’s next-generation cluster management system.”
 
-我们的解决方案是基于共享状态构建的新的并行调度器体系结构，使用无锁乐观并发控制，以实现可扩展性和性能可伸缩性。这种架构正在谷歌的下一代集群管理系统Omega中使用
+* Optimistic Concurrency
 
+在Controller的Control loop中会改变集群中对象的状态(比如创建一个POD)，然后将结果写到资源中的status中。实际中Controller通常会部署多个，因此这里更新资源的status字段是会存在并发写的。 
+
+下图中描述了一种解决方案：
+
+![optimistic-concurrent](../images/optimistic_concurrent.jpg)
+
+这个解决方案是基于共享状态构建的新的并行调度器体系结构，使用无锁乐观并发控制，以实现可扩展性和性能可伸缩性。这种架构正在谷歌的下一代集群管理系统Omega中使用
+Kubernetes大量参考了Omega。为了做了无锁并发写，Kubernetes也采用了乐观并发。这意味着当API Server探测到并发写(通过resource version来判断)，
+它会拒绝掉后续的写操作。然后交由Controller自己来处理写入冲突的问题。可以简单的用下面的代码来表示这个过程。
 
 ```go
 var err error
@@ -130,65 +127,87 @@ for retries := 0; retries < 10; retries++ {
 }
 ```
 
-conflict errors are totally normal in controllers. Always expect them and handle them gracefully.
-冲突错误在控制器中是完全正常的。我们应该总是预期它们会出现，并优雅地处理它们
+乐观并发很适合Kubernetest中Controller的Controll Loop，Controll Loop中的水平触发总是获取到最新的状态，这个和乐观并发在失败后总是基于最新状态
+再次发生写入的思想不谋而合。
 
-![optimistic-concurrency](images/optimistic-concurrency.png)
+> 写冲突错误在Controller中是完全正常的。我们应该总是预期它们会出现，并优雅地处理它们。
+> client.Get返回的对象foo，包含了ObjectMeta字段，这个字段中包含了resource version，API Server借助这个字段来探测并发写。
+> 边缘触发 + 水平触发 + resync + optimistic concurrency 是Kubernetes 事件驱动架构的核心
 
-## Operator
+* Operators
 
-A Site Reliability Engineer (SRE) is a person [who] operates an application by writing software. They are an engineer, a developer, who knows how to develop software specifically for a particular application domain. The resulting piece of software has an application’s operational domain knowledge programmed into it.
+一个SRE是一人，他来操作其他开发工程师写的软件，这个软件是具有领域知识的，因此要运维需要掌握这个软件的领域知识才能运维好。而这些运维所需要的领域知识称之为Operator。
+一个Operator就是一个具有领域知识的用于运维的controller，借助了Kubernetes API进行扩展的Controller，借助这个Controller就可以实现简单的配置就达到运维复杂的带有状态的应用程序的效果。
+一般来说，这个Controller通过一组具有领域知识的schema组成的crd来实现自动化运维。
 
-We call this new class of software Operators. An Operator is an application-specific controller that extends the Kubernetes API to create, configure, 
-and manage instances of complex stateful applications on behalf of a Kubernetes user. It builds upon the basic Kubernetes resource and controller concepts 
-but includes domain or application-specific knowledge to automate common tasks.
 
-1. There’s some domain-specific operational knowledge you’d like to automate.
+***Reference**
 
-2. The best practices for this operational knowledge are known and can be made explicit—for example, 
-   in the case of a Cassandra operator, when and how to re-balance nodes, or in the case of an operator for a service mesh, how to create a route.
+* [extending-kubernetes-101](https://speakerdeck.com/mhausenblas/extending-kubernetes-101)
+* [The Mechanics of Kubernetes](https://medium.com/@dominik.tornow/the-mechanics-of-kubernetes-ac8112eaa302)
+* [A deep dive into Kubernetes controllers](https://engineering.bitnami.com/articles/a-deep-dive-into-kubernetes-controllers.html)
+* [深入浅出Event Sourcing和CQRS](https://zhuanlan.zhihu.com/p/38968012)
+* [Events, the DNA of Kubernetes](https://www.mgasch.com/post/k8sevents/)
+* [QoS, "Node allocatable" and the Kubernetes Scheduler](https://www.mgasch.com/post/sched-reconcile/)
+* [level-triggering-and-reconciliation-in-kubernetes](https://hackernoon.com/level-triggering-and-reconciliation-in-kubernetes-1f17fe30333d)
+* [introducing-operators](https://coreos.com/blog/introducing-operators.html)
 
-3. The artifacts shipped in the context of the operator are
-	1. A set of custom resource definitions (CRDs) capturing the domain-specific schema and 
-	   custom resources following the CRDs that, on the instance level, represent the domain of interest.
 
-	2. A custom controller, supervising the custom resources, potentially along with core resources. For example, the custom controller might spin up a pod.
+## Chapter2. Kubernetes API Basics
 
-Operator就是一个具有领域知识的用于运维的controller，一般来说，这个controller通过一组具有领域知识的schema组成的crd来实现自动化运维。
+* API Server
 
-![optimistic-concurrency](images/operator-concept.png)
+API Server在Kubernetes中是一个核心组件，集群中所有的组件都是通过API Server来和底层的分布式存储etcd进行交互的。API Server的主要指责有几下几点:
 
-Ref:
-[introducing-operators](https://coreos.com/blog/introducing-operators.html)
-## API
+1. 所有的组件通过API Server来解耦，通过API Server来产生事件和消费事件。
+2. 负责对象的存储和读取，API Server最终还会和底层的etcd交互，将Kubernetes中的对象存储在etcd中。
+3. API Server负责给集群内部的组件做代理，例如对Kubernetes dashboard、strea logs、service ports、以及kubectl exec等
 
-“In Kubernetes programs, a kind directly corresponds with a Golang type.”
+API Server提供了符合RESTful类型的接口，主要是用于处理HTTP请求去查询和操作Kubernetes的资源，不同的HTTP method所代表的语义不同:
 
-Kind: 实体的类型，每一个对象都有一个Kind字段，kind主要有三类。
+1. `Get` 获取到指定类型的资源，比如POD、或者是获取一个资源list，例如一个namespace下的所有POD
+2. `POST` 创建一个资源，比如service、deployment等
+3. `PUT` 更新一个已经存在的资源，比如改变一个POD中的容器镜像
+4. `PATCH` 部分更新存在的资源，更多细节见: [Use a JSON merge patch to update a Deployment](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/#use-a-json-merge-patch-to-update-a-deployment)
+5. `DELETE` 销毁一个资源
+
+> kubectl -n THENAMESPACE get pods 等同于 HTTP GET /api/v1/namespaces/THENAMESPACE/pods的结果。
+
+* API Terminology
+
+1. **Kind**: 
+
+表示实体的类型，每一个对象都有一个Kind字段，kind主要有三类。
+	
 	1. 表示一个持久化的实体对象，比如Pod、Endpoints等
 	2. 一个或多个kind实体，比如PodList、NodeLists等
 	3. 特殊目的，比如binding、scale
-API Group: 一堆kind的逻辑上所属集合，利润
-Version: API group或者是对象的版本，一个group或对象可以存在多个版本。
-Resource: 通常小写、复数形式(pods) 用来识别一系列的HTTP endpoints路径，用来暴露对象的CRUD语义，例如: .../pods/nginx 查看名为nginx的pod
 
-所有的主resource都是具有CRUD语义的，但是也存在一些response可以支持更多的action，比如.../pod/nginx/port-forward，这个时候我们称之为Subresources。这需要通过自定义协议来替代RESET。
-例如exec是通过WebSockets来实现的。
+2. **API Group**: 一堆Kind的逻辑上所属集合
+3. **Version**: API group或者是对象的版本，一个group或对象可以存在多个版本。
+4. **Resource**: 通常小写、复数形式(pods) 用来识别一系列的HTTP endpoints路径，用来暴露对象的CRUD语义，例如: `.../pods/nginx` 查看名为nginx的pod
 
-在Kubernetes中，kind是直接映射到一个Golang类型的。
+> 所有的Resource都是具有CRUD语义的，但是也存在一些Resource可以支持更多的action，比如`.../pod/nginx/port-forward`，这个时候我们称之为`Subresources`。这需要通过自定义协议来替代RESET。例如exec是通过`WebSockets`来实现的。
+
+在Kubernetes中，每一个Kind是直接映射到一个Golang类型的。
 
 > Resources和Kind是相互的，Resources指定HTTP endpoints，而Kind是这个endpoints返回对象的类型，也是etcd中持久化的对象。
 > 每一个对象都可以按照version v1来表示，也可以按照v1beta1来表示，可以返回不同的版本
 
-Resources是API group和version的一部分，三者被称之为GVR(GroupVersionResource)，一个GVR唯一标示一个HTTP path。例如: `/apis/batch/v1/namespaces/default/jobs`
-通过GVR可以获取到类型为kind的对象，同理这个对象也是属于这个version和Group的。因此称之为GVK(GroupVersionKind)
+`Resources`是API group和version的一部分，三者被称之为GVR(GroupVersionResource)，一个`GVR`唯一标示一个HTTP path。例如: `/apis/batch/v1/namespaces/default/jobs`
+通过`GVR`可以获取到类型为kind的对象，同理这个对象也是属于这个version和Group的。因此称之为`GVK`(GroupVersionKind)
 
-> 核心组/api/v1，命名组/apis/$name/$version，，为什么核心组不是/apis/core/v1呢? 这是因为历史原因导致的，API Group是核心组之后引入的。
+> 核心组zai /api/v1，命名组zai /apis/$name/$version，，为什么核心组不是/apis/core/v1呢? 这是因为历史原因导致的，API Group是核心组之后引入的。
 
-![gvr](images/gvr.jpg)
+例如下面这个http paths，就可以映射到一个`GVR`，通过`GVR`可以获取到类型为Kind的对象，也就间接的映射到了一个`GVK`。
 
+![gvr](../images/gvr.jpg)
 
-通过下面两种方式来访问资源
+> GVK到GVR的映射在Kubernetes中被称之为`REST Mapping`。
+> 除了GVR描述的HTTP path外，还存在另外一种类型的HTTP path，比如`/metrics`、`logs`、`healthz`等
+> 通过在HTTP path后面添加`?watch=true`就可以watch到请求的资源，具体细节见: [watch modus](https://kubernetes.io/docs/reference/using-api/api-concepts/#efficient-detection-of-changes)
+
+知道了HTTP path就可以通过curl访问API Server获取到资源，平时我们通过kubectl命令获取资源的方式内部其实也是通过访问HTTP path的方式来获取的，下面列举了两种通过HTTP path获取资源的方式。
 
 ```bash
 kubectl proxy --port=8080
@@ -199,26 +218,111 @@ curl http://127.0.0.1:8080/apis/batch/v1
 kubectl get --raw /apis/batch/v1
 ```
 
-Apiserver是如何处理请求的:
-1. 首先HTTP request会被`DefaultBuildHandlerChain`注册的filters chain来处理
+* API Server如何处理请求
+
+1. 首先HTTP request会被`DefaultBuildHandlerChain`注册的filters chain来处理(鉴权、admission、validation等)
 2. 接着根据HTTP path走到分发器，通过分发器来路由到最终的handler
 3. 每一个gvr都会注册一个handler
 
-基本上一个请求会经过以下几个阶段:
-1. 鉴权
-2. admission
-	1. mutating phase
-	2. schemla validation
-3. validation
-
-multaing webhooks、validation webhooks就可以hook上面两个阶段。
-
-![apiserver process](images/apiserver-process.jpg)
+![apiserver process](../images/apiserver-process.jpg)
 
 
-## Object
+***Reference**
 
-Kubernetes中的对象，其基础接口如下:
+* [Use a JSON merge patch to update a Deployment](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/#use-a-json-merge-patch-to-update-a-deployment)
+* [watch modus](https://kubernetes.io/docs/reference/using-api/api-concepts/#efficient-detection-of-changes)
+
+
+## Chapter3. Basics of client-go
+
+* `client-go`、`api`、`apimachinery`三个重要的仓库
+
+`client-go`、`api`、`apimachinery`是Kubernetes client中最核心的三个仓库。
+
+1. [client-go](https://github.com/kubernetes/client-go)仓库是用来访问kubernetes的client的接口。
+2. Pod、Deployment等对象则是放在[api](https://github.com/kubernetes/api)的仓库中，例如Pod对象，它属于core group，对于v1版本来说，它的位置就在`api/core/v1`目录下。
+   Pod的类型定义就在`types.go`文件中。这个目录下还包含了一些其他文件，部分文件都是通过代码生成器自动生成的。
+3. 最后一个仓库是[apimachinery](https://github.com/kubernetes/apimachinery)，包含了所有通用的用来构建类似Kubernetes风格API的模块。
+
+* Creating and Using a Client
+
+```golang
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/rest"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
+)
+
+func main() {
+	// 先从集群Pod中/var/run/secrets/kubernetes.io/serviceaccount获取到service account转换为rest.Config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		// 获取service account失败，直接去读取kubeconfig文件
+		kubeconfig := filepath.Join("~", ".kube", "config")
+		// 或者是从环境变量中获取到kubeconfig的位置
+		if envvar := os.Getenv("KUBECONFIG"); len(envvar) > 0 {
+			kubeconfig = envvar
+		}
+		// 通过kubeconfig文件构建rest.Config
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			fmt.Printf("The kubeconfig cannot be loaded: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	// 用reset.Config构建kubernetes client
+	clientset, err := kubernetes.NewForConfig(config)
+	// 读取book namespace下的名为example的Pod对象
+	pod, err = “clientset.CoreV1().Pods("book").Get("example", metav1.GetOptions{})
+}
+```
+
+
+* Versioning和Compatibillity
+
+Kubernetes API是带有版本的，每个对象都有不同的版本，我们可以在api仓库中的`apps`目录下可以看到各个版本的对象存在，同样的，对于client-go来说，针对不同的对象也存在不同的版本的接口。我们可以在
+client-go仓库下的`kubernestes/typed/apps`目录下找到对应版本对象的接口。Kubernestes和`client-go`是共用相同的api仓库的，因此client-go的版本需要和kubernetes具有兼容的版本才能发挥作用，
+否则Api Server会拒绝掉`client-go`发出来的请求。如果client-go的版本比kubernertes的要新，那么当携带某些新增字段的时候，kubernetes可能会拒绝掉，也有可能会忽略掉，这个要看具体的字段的行为。
+kubernetes为了解决对象版本兼容问题，在实际将对象存储在etcd中时会按照一个称之为内部版本的对象存储进去，不同版本的API请求过来的时候，通过预定义的转换器进行转换来实现版本之间的兼容。
+
+* Kubernetes Objects in Go
+
+Kubernetes中的资源，准确来说对应到Go中就是一个对象，资源的类型对应到yaml中的Kind字段，比如下面这个Pod资源。其yaml中的Kind字段就是Pod。
+在Kubernetest中会通过一个`struct`来表示这个Pod，我们还可以发现的Kubernetes中所有的资源都会有一些公共的字段，比如apiVersion、Kind、metadata、spec等。
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-demo
+  namespace: default
+  labels:
+    app: myapp
+    tier: fronted
+spec:
+  containers:
+  - name: myapp
+    image: ikubernetes/myapp:v1
+  - name: busybox
+    image: busybox:latest
+    command:
+    - "bin/sh"
+    - "-c"
+    - "echo $(date) >> /tmp/txt; sleep 5"
+```
+
+Kubernetes中资源所对应的对象都默认实现了`runtime.Object`接口，这个接口很简单，定义如下。
 
 ```golang
 // Object interface must be supported by all API types registered with Scheme. Since objects in a scheme are
@@ -287,7 +391,7 @@ type ObjectMeta struct {
 > 每一个对象都会包含一个`metav1.TypeMeta struct`字段和一个`metav1.ObjectMeta`字段
 > 前者用来描述一个对象，比如是什么kind，什么APIVersion，后者则是一些元信息，比如label、注解、其中ResourceVersion就是用来实现乐观并发(optimistic-concurrency)等
 
-一个POD对象如下:
+例如一个POD对象如下:
 
 ```golang
 // Pod is a collection of containers that can run on a host. This resource is created
@@ -320,6 +424,114 @@ type Pod struct {
 > 请求分为长请求和短请求，对于长请求一般来说是诸如watch、一些Subresources(exec、sport-forward)等，对于短请求则会有60s的超时时间，当API server下线的时候会等待60s直到服务完这些短请求
 > 对于长请求则直接断掉。从而实现所谓的优雅关闭。
 
+## Client Sets
+
+在上面的example中，通过`kubernetes.NewForConfig(config)`创建了一个`Clientset`，一个`Clientset`是可以用来访问多个`API Group`和资源的接口，其定义如下。
+
+
+```go
+// Clientset contains the clients for groups. Each group has exactly one
+// version included in a Clientset.
+type Clientset struct {
+	*discovery.DiscoveryClient
+	admissionregistrationV1      *admissionregistrationv1.AdmissionregistrationV1Client
+	admissionregistrationV1beta1 *admissionregistrationv1beta1.AdmissionregistrationV1beta1Client
+	appsV1                       *appsv1.AppsV1Client
+	appsV1beta1                  *appsv1beta1.AppsV1beta1Client
+	appsV1beta2                  *appsv1beta2.AppsV1beta2Client
+	auditregistrationV1alpha1    *auditregistrationv1alpha1.AuditregistrationV1alpha1Client
+	authenticationV1             *authenticationv1.AuthenticationV1Client
+	authenticationV1beta1        *authenticationv1beta1.AuthenticationV1beta1Client
+	authorizationV1              *authorizationv1.AuthorizationV1Client
+	authorizationV1beta1         *authorizationv1beta1.AuthorizationV1beta1Client
+	autoscalingV1                *autoscalingv1.AutoscalingV1Client
+	autoscalingV2beta1           *autoscalingv2beta1.AutoscalingV2beta1Client
+	autoscalingV2beta2           *autoscalingv2beta2.AutoscalingV2beta2Client
+	batchV1                      *batchv1.BatchV1Client
+	batchV1beta1                 *batchv1beta1.BatchV1beta1Client
+	batchV2alpha1                *batchv2alpha1.BatchV2alpha1Client
+	certificatesV1beta1          *certificatesv1beta1.CertificatesV1beta1Client
+	coordinationV1beta1          *coordinationv1beta1.CoordinationV1beta1Client
+	coordinationV1               *coordinationv1.CoordinationV1Client
+	coreV1                       *corev1.CoreV1Client
+	discoveryV1alpha1            *discoveryv1alpha1.DiscoveryV1alpha1Client
+	discoveryV1beta1             *discoveryv1beta1.DiscoveryV1beta1Client
+	eventsV1beta1                *eventsv1beta1.EventsV1beta1Client
+	extensionsV1beta1            *extensionsv1beta1.ExtensionsV1beta1Client
+	flowcontrolV1alpha1          *flowcontrolv1alpha1.FlowcontrolV1alpha1Client
+	networkingV1                 *networkingv1.NetworkingV1Client
+	networkingV1beta1            *networkingv1beta1.NetworkingV1beta1Client
+	nodeV1alpha1                 *nodev1alpha1.NodeV1alpha1Client
+	nodeV1beta1                  *nodev1beta1.NodeV1beta1Client
+	policyV1beta1                *policyv1beta1.PolicyV1beta1Client
+	rbacV1                       *rbacv1.RbacV1Client
+	rbacV1beta1                  *rbacv1beta1.RbacV1beta1Client
+	rbacV1alpha1                 *rbacv1alpha1.RbacV1alpha1Client
+	schedulingV1alpha1           *schedulingv1alpha1.SchedulingV1alpha1Client
+	schedulingV1beta1            *schedulingv1beta1.SchedulingV1beta1Client
+	schedulingV1                 *schedulingv1.SchedulingV1Client
+	settingsV1alpha1             *settingsv1alpha1.SettingsV1alpha1Client
+	storageV1beta1               *storagev1beta1.StorageV1beta1Client
+	storageV1                    *storagev1.StorageV1Client
+	storageV1alpha1              *storagev1alpha1.StorageV1alpha1Client
+}
+```
+
+比如通过`Clientset`的appsV1接口，就可以访问apps组，v1 version下的所有资源，在这个组下有DaemonSet、ControllerRevision、Deployment、ReplcaSets、StatefulSet等资源，appsV1定义如下:
+
+```go
+// DeploymentsGetter has a method to return a DeploymentInterface.
+// A group's client should implement this interface.
+type DeploymentsGetter interface {
+	Deployments(namespace string) DeploymentInterface
+}
+
+type AppsV1Interface interface {
+	RESTClient() rest.Interface
+	ControllerRevisionsGetter
+	DaemonSetsGetter
+	DeploymentsGetter
+	ReplicaSetsGetter
+	StatefulSetsGetter
+}
+
+// AppsV1Client is used to interact with features provided by the apps group.
+type AppsV1Client struct {
+	restClient rest.Interface
+}
+
+// DeploymentInterface has methods to work with Deployment resources.
+type DeploymentInterface interface {
+	Create(*v1.Deployment) (*v1.Deployment, error)
+	Update(*v1.Deployment) (*v1.Deployment, error)
+	UpdateStatus(*v1.Deployment) (*v1.Deployment, error)
+	Delete(name string, options *metav1.DeleteOptions) error
+	DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error
+	Get(name string, options metav1.GetOptions) (*v1.Deployment, error)
+	List(opts metav1.ListOptions) (*v1.DeploymentList, error)
+	Watch(opts metav1.ListOptions) (watch.Interface, error)
+	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Deployment, err error)
+	GetScale(deploymentName string, options metav1.GetOptions) (*autoscalingv1.Scale, error)
+	UpdateScale(deploymentName string, scale *autoscalingv1.Scale) (*autoscalingv1.Scale, error)
+
+	DeploymentExpansion
+}
+
+// Get takes name of the deployment, and returns the corresponding deployment object, and an error if there is any.
+func (c *deployments) Get(name string, options metav1.GetOptions) (result *v1.Deployment, err error) {
+	result = &v1.Deployment{}
+	err = c.client.Get().
+		Namespace(c.ns).
+		Resource("deployments").
+		Name(name).
+		VersionedParams(&options, scheme.ParameterCodec).
+		Do().
+		Into(result)
+	return
+}
+```
+
+AppsV1Client实现了AppsV1Interface接口，通过这个接口可以访问这个组下的所有资源，通过其定义可以看出，最终都是通过rest接口来访问的。
 
 ## Informers and Caching
 
@@ -898,6 +1110,134 @@ NumRequeues：获取指定元素的排队数。
 ```
 
 
+5. Scheme
+
+```golang
+
+import "k8s.io/apimachinery/pkg/runtime/schema"
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+// SchemeGroupVersion is group version used to register these objects
+var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1alpha1"}
+
+// Adds the list of known types to Scheme.
+// AddKnownTypes方法中会通过反射获取到资源对象的名字，然后和GroupVersion组合成GVK，最后用GVK和对象建立映射关系。
+func addKnownTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&At{},
+		&AtList{},
+	)
+	// 构建Scheme管理多version
+	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+	return nil
+}
+
+func (s *Scheme) AddKnownTypes(gv schema.GroupVersion, types ...Object) {
+	s.addObservedVersion(gv)
+	for _, obj := range types {
+		t := reflect.TypeOf(obj)
+		if t.Kind() != reflect.Ptr {
+			panic("All types must be pointers to structs.")
+		}
+		t = t.Elem()
+		s.AddKnownTypeWithName(gv.WithKind(t.Name()), obj)
+	}
+}
+```
+
+6. Finalizers
+
+Finalizers 字段属于 Kubernetes GC 垃圾收集器，是一种删除拦截机制，能够让控制器实现异步的删除前（Pre-delete）回调。
+其存在于任何一个资源对象的 Meta 中，在 k8s 源码中声明为 []string，该 Slice 的内容为需要执行的拦截器名称。
+
+The key point to note is that a finalizer causes “delete” on the object to become an “update” to set deletion timestamp. 
+
+finalizer会导致对象的删除变成对象的deletion timestamp字段的更新。
+
+```golang
+unc (r *CronJobReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+    ctx := context.Background()
+    log := r.Log.WithValues("cronjob", req.NamespacedName)
+
+    var cronJob *batchv1.CronJob
+    if err := r.Get(ctx, req.NamespacedName, cronJob); err != nil {
+        log.Error(err, "unable to fetch CronJob")
+        // we'll ignore not-found errors, since they can't be fixed by an immediate
+        // requeue (we'll need to wait for a new notification), and we can get them
+        // on deleted requests.
+        return ctrl.Result{}, client.IgnoreNotFound(err)
+    }
+
+    // name of our custom finalizer
+    myFinalizerName := "storage.finalizers.tutorial.kubebuilder.io"
+
+    // examine DeletionTimestamp to determine if object is under deletion
+    if cronJob.ObjectMeta.DeletionTimestamp.IsZero() {
+        // The object is not being deleted, so if it does not have our finalizer,
+        // then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		// 注册finalizer
+        if !containsString(cronJob.ObjectMeta.Finalizers, myFinalizerName) {
+            cronJob.ObjectMeta.Finalizers = append(cronJob.ObjectMeta.Finalizers, myFinalizerName)
+            if err := r.Update(context.Background(), cronJob); err != nil {
+                return ctrl.Result{}, err
+            }
+        }
+    } else {
+        // The object is being deleted
+        if containsString(cronJob.ObjectMeta.Finalizers, myFinalizerName) {
+            // our finalizer is present, so lets handle any external dependency
+            if err := r.deleteExternalResources(cronJob); err != nil {
+                // if fail to delete the external dependency here, return with error
+                // so that it can be retried
+                return ctrl.Result{}, err
+            }
+
+            // remove our finalizer from the list and update it.
+            cronJob.ObjectMeta.Finalizers = removeString(cronJob.ObjectMeta.Finalizers, myFinalizerName)
+            if err := r.Update(context.Background(), cronJob); err != nil {
+                return ctrl.Result{}, err
+            }
+        }
+
+        // Stop reconciliation as the item is being deleted
+        return ctrl.Result{}, nil
+    }
+
+    // Your reconcile logic
+
+    return ctrl.Result{}, nil
+}
+
+func (r *Reconciler) deleteExternalResources(cronJob *batch.CronJob) error {
+    //
+    // delete any external resources associated with the cronJob
+    //
+    // Ensure that delete implementation is idempotent and safe to invoke
+    // multiple types for same object.
+}
+
+// Helper functions to check and remove string from a slice of strings.
+func containsString(slice []string, s string) bool {
+    for _, item := range slice {
+        if item == s {
+            return true
+        }
+    }
+    return false
+}
+
+func removeString(slice []string, s string) (result []string) {
+    for _, item := range slice {
+        if item == s {
+            continue
+        }
+        result = append(result, item)
+    }
+    return
+}
+```
+
 Ref:
 1. https://kubernetes.io/zh/docs/concepts/workloads/controllers/garbage-collection/
 2. https://www.kubernetes.org.cn/6839.html
@@ -935,4 +1275,172 @@ kubebuilder init --domain programming-kubernetes.info --license apache2 --owner 
 
 ```shell
 kubebuilder create api --group cnat --version v1alpha1 --kind At
+```
+
+4. API Interface
+
+```shell
+// AtReconciler reconciles a At object
+type AtReconciler struct {
+	client.Client
+	Log    logr.Logger
+	Scheme *runtime.Scheme
+}
+
+// +kubebuilder:rbac:groups=cnat.programming-kubernetes.info,resources=ats,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cnat.programming-kubernetes.info,resources=ats/status,verbs=get;update;patch
+
+// 核心的Reconciler接口，通过client.Client可以访问自定义资源和k8s基本资源
+func (r *AtReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	_ = context.Background()
+	_ = r.Log.WithValues("at", req.NamespacedName)
+
+	// your logic here
+
+	return ctrl.Result{}, nil
+}
+```
+
+### Operator-SDK
+等同于kubebuilder
+
+## Shipping Controller and Operator
+
+### Packageing
+
+通过helm来渲染YAML文件，解决YAML文件只能是静态的问题，这样就可以动态控制YAML文件了。
+还可以通过kustomize
+
+
+never use the default service account in a namespace
+
+
+## Custom API Server
+
+CRD的一些限制:
+
+1. 限制只能使用etcd作为存储
+2. 不支持protobuf，只能是JSON
+3. 只支持/status和/scale两种子资源
+4. 不支持graceful deletetion、尽管可以通过Finalizer来模拟，但是不支持指定graceful deletion time
+5. 对API Server的负载影响比较大，因为需要用通用的方式来实现所有正常资源需要走的逻辑和算法
+6. 只能实现CRUD基本语义
+7. 不支持同类资源的存储共享(比如不同API Group的相同资源底层不支持使用相同的存储)
+
+相反一个自定义的API Server没有上面的限制。
+
+1. 可以使用任何存储，例如metrics API Server可以存储数据在内存中
+2. 可以提供protobuf支持
+3. 可以提供任意的子资源
+4. 可以实现graceful deletion
+5. 可以实现所有的操作
+6. 可以实现自定义语义，比如原子的分配ip，如果使用webbook的方式可能会因为后续的pipeline导致请求失败，这个时候分配的ip需要取消，但是webhook是没办法做撤销的，需要结合控制器来完成。这就是因为
+webhook可能会产生副作用。
+7. 可以对底层类型相同的资源，进行共享存储。
+
+自定义API Server工作流程:
+1. K8s API server接收到请求
+2. 请求传递了handler chanin，这里面包含了鉴权、日志审计等
+3. 请求会走到kube-aggregator组件，这个组件知道哪些API 请求是需要走自定义API Server的，那些Group走API server这是API Service定义的
+4. 转发请求给自定义API Server
+
+> 自定义API Server的鉴权可以delegated给k8s的 API Server，通过SubjectAccessReview来实现
+
+```yaml
+
+```
+
+// 定义哪些group、version的资源要走自定义Api Server
+```yaml
+apiVersion: apiregistration.k8s.io/v1beta1
+kind: APIService
+metadata:
+  name: name
+spec:
+  group: API-group-name
+  version: API-group-version
+  service:
+    namespace: custom-API-server-service-namespace
+    name: -API-server-service
+  caBundle: base64-caBundle
+  insecureSkipTLSVerify: bool
+  // 相同的group高优先级覆盖低优先级
+  groupPriorityMinimum: 2000
+  // 相同group的不同version通过优先级来选择
+  versionPriority: 20
+```
+
+
+
+Every API server serves a number of resources and versions 
+Some resources have multiple versions. To make multiple versions of a resource possible, the API server converts between versions.
+To avoid quadratic growth of necessary conversions between versions, API servers use an internal version when implementing the actual API logic. 
+The internal version is also often called hub version because it is a kind of hub that every other version is converted to and from
+
+API Server在内部给每一个资源都维护了一个内部版本，所有的版本都会转换成这个内部版本再去操作。
+
+1. 用户发送指定版本的请求给API server(比如v1)
+2. API server解码请求，然后转换为内部版本
+3. API server传递内部版本给admission 和 validation
+4. API server在registry中实现的逻辑是根据内部版本来实现的
+5. etcd读和写带有版本的对象(例如v2，存储版本)，他将从内部版本进行转换。
+6. 最终结果会将转换为请求的版本，比如这里就是v1
+
+
+Default和Conversion需要给内部版本和外部版本提供Conversion方法和默认值。
+
+This trick of using a pointer works for primitive types like strings. For maps and arrays, it is often hard to reach roundtrippability without identifying nil maps/arrays and empty maps/arrays.
+Most defaulters for maps and arrays in Kubernetes therefore apply the default in both cases, working around encoding and decoding bugs.
+
+对于基本类型如何区分默认的零值是设置了还是没有设置，比如bool默认是false，那用户到底是设置了false、还是没有设置导致默认值用了false呢? k8s通过指针来解决，如果有设置那么指针不为空，否则就是没有设置。
+
+
+
+TODO(tianqian.zyf): 实现一个Custom API Server
+
+
+## Advanced Custom Resources
+
+versioning、coversion、admission controllers
+
+通过versioning机制可以保证API的演进，同时也可以向后兼容，versiong机制的核心在于Conversion。
+
+```yaml
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: pizzas.restaurant.programming-kubernetes.info
+spec:
+  group: restaurant.programming-kubernetes.info
+  names:
+    kind: Pizza
+    listKind: PizzaList
+    plural: pizzas
+    singular: pizza
+  scope: Namespaced
+  version: v1alpha1
+  versions:
+  // 定义v1alpha1为存储版本，
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema: ...
+  - name: v1beta1
+    served: true
+    storage: false
+    schema: ...
+```
+
+1. The client (e.g., our kubectl get pizza margherita) requests a version.
+2. etcd has stored the object in some version.
+3. If the versions do not match, the storage object is sent to the webhook server for conversion. The webhook returns a response with the converted object.
+4. The converted object is sent back to the client.
+
+```go
+type ConversionReview struct {
+    metav1.TypeMeta `json:",inline"`
+    Request *ConversionRequest
+    Response *ConversionResponse
+}
+
 ```
