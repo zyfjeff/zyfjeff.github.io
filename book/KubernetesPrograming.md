@@ -235,7 +235,7 @@ kubectl get --raw /apis/batch/v1
 
 ## Chapter3. Basics of client-go
 
-* `client-go`、`api`、`apimachinery`三个重要的仓库
+### `client-go`、`api`、`apimachinery`三个重要的仓库
 
 `client-go`、`api`、`apimachinery`是Kubernetes client中最核心的三个仓库。
 
@@ -244,7 +244,7 @@ kubectl get --raw /apis/batch/v1
    Pod的类型定义就在`types.go`文件中。这个目录下还包含了一些其他文件，部分文件都是通过代码生成器自动生成的。
 3. 最后一个仓库是[apimachinery](https://github.com/kubernetes/apimachinery)，包含了所有通用的用来构建类似Kubernetes风格API的模块。
 
-* Creating and Using a Client
+### Creating and Using a Client
 
 ```golang
 package main
@@ -280,6 +280,9 @@ func main() {
 			fmt.Printf("The kubeconfig cannot be loaded: %v\n", err)
 			os.Exit(1)
 		}
+		// 返回的config可以做一些自定义操作，比如自定义UserAgent、自定义AcceptContentTypes、超时实际、限流等
+		// config.UserAgent = fmt.Sprintf("Go %s", runtime.GOOS);
+		// config.AcceptContentTypes = "application/vnd.kubernetes.protobuf,application/json"
 	}
 	// 用reset.Config构建kubernetes client
 	clientset, err := kubernetes.NewForConfig(config)
@@ -289,14 +292,14 @@ func main() {
 ```
 
 
-* Versioning和Compatibillity
+### Versioning和Compatibillity
 
 Kubernetes API是带有版本的，每个对象都有不同的版本，我们可以在api仓库中的`apps`目录下可以看到各个版本的对象存在，同样的，对于client-go来说，针对不同的对象也存在不同的版本的接口。我们可以在
 client-go仓库下的`kubernestes/typed/apps`目录下找到对应版本对象的接口。Kubernestes和`client-go`是共用相同的api仓库的，因此client-go的版本需要和kubernetes具有兼容的版本才能发挥作用，
 否则Api Server会拒绝掉`client-go`发出来的请求。如果client-go的版本比kubernertes的要新，那么当携带某些新增字段的时候，kubernetes可能会拒绝掉，也有可能会忽略掉，这个要看具体的字段的行为。
 kubernetes为了解决对象版本兼容问题，在实际将对象存储在etcd中时会按照一个称之为内部版本的对象存储进去，不同版本的API请求过来的时候，通过预定义的转换器进行转换来实现版本之间的兼容。
 
-* Kubernetes Objects in Go
+### Kubernetes Objects in Go
 
 Kubernetes中的资源，准确来说对应到Go中就是一个对象，资源的类型对应到yaml中的Kind字段，比如下面这个Pod资源。其yaml中的Kind字段就是Pod。
 在Kubernetest中会通过一个`struct`来表示这个Pod，我们还可以发现的Kubernetes中所有的资源都会有一些公共的字段，比如apiVersion、Kind、metadata、spec等。
@@ -418,13 +421,13 @@ type Pod struct {
 }
 ```
 
-每一个对象都有自己独立的Spec和Status，通常Spec表示用户的期望，Status则是期望的的结果，是Controller和Operator来负责填充。也存在一些异常，比如endpoints和RBAC
+每一个对象都有自己独立的Spec和Status，通常Spec表示用户的期望，Status则是期望的的结果，是Controller和Operator来负责填充。也存在一些异常情况，比如endpoints和RBAC
 
 
 > 请求分为长请求和短请求，对于长请求一般来说是诸如watch、一些Subresources(exec、sport-forward)等，对于短请求则会有60s的超时时间，当API server下线的时候会等待60s直到服务完这些短请求
 > 对于长请求则直接断掉。从而实现所谓的优雅关闭。
 
-## Client Sets
+### Client Sets
 
 在上面的example中，通过`kubernetes.NewForConfig(config)`创建了一个`Clientset`，一个`Clientset`是可以用来访问多个`API Group`和资源的接口，其定义如下。
 
@@ -532,15 +535,65 @@ func (c *deployments) Get(name string, options metav1.GetOptions) (result *v1.De
 ```
 
 AppsV1Client实现了AppsV1Interface接口，通过这个接口可以访问这个组下的所有资源，通过其定义可以看出，最终都是通过rest接口来访问的。
+注意观察你会发现上面的接口中都带有一个Options，比如ListOptions、DeleteOptions、GetOptions等，通过这些Options可以自定义一些过滤条件，比如ListOptions中可以指定label selector进行过滤。
+另外上面的接口中还有一个Watch接口，这个接口是用来监听对象的所有改变(添加、删除、更新)，返回的watche.Interface其定义如下。
 
-## Informers and Caching
+```go
+// Interface can be implemented by anything that knows how to watch and report changes.
+type Interface interface {
+	// Stops watching. Will close the channel returned by ResultChan(). Releases
+	// any resources used by the watch.
+	Stop()
+
+	// Returns a chan which will receive all the events. If an error occurs
+	// or Stop() is called, this channel will be closed, in which case the
+	// watch should be completely cleaned up.
+	ResultChan() <-chan Event
+}
+
+// EventType defines the possible types of events.
+type EventType string
+
+const (
+	Added    EventType = "ADDED"
+	Modified EventType = "MODIFIED"
+	Deleted  EventType = "DELETED"
+	Bookmark EventType = "BOOKMARK"
+	Error    EventType = "ERROR"
+
+	DefaultChanSize int32 = 100
+)
+
+// Event represents a single event to a watched resource.
+// +k8s:deepcopy-gen=true
+type Event struct {
+	Type EventType
+
+	// Object is:
+	//  * If Type is Added or Modified: the new state of the object.
+	//  * If Type is Deleted: the state of the object immediately before deletion.
+	//  * If Type is Bookmark: the object (instance of a type being watched) where
+	//    only ResourceVersion field is set. On successful restart of watch from a
+	//    bookmark resourceVersion, client is guaranteed to not get repeat event
+	//    nor miss any events.
+	//  * If Type is Error: *api.Status is recommended; other types may make sense
+	//    depending on context.
+	Object runtime.Object
+}
+```
+
+> 不鼓励直接使用watch接口，应该使用封装好的Informes。
+
+
+### Informers and Caching
 
 Informers通过watch接口实现Cachae和增量更新。并能够很好的处理网络抖动，断网等场景。尽可能的每一种资源类型只创建一个Informers，否则会导致资源的浪费，为此可以通过`InformerFactory`来创建Informer。
 他内部对于同一个资源类型只会创建一个informer实例。
 
-It is very important to remember that any object passed from the listers to the event handlers is owned by the informers. If you mutate it in any way, you risk introducing hard-to-debug cache coherency issues into your application. Always do a deep copy (see “Kubernetes Objects in Go”) before changing an object.
+> It is very important to remember that any object passed from the listers to the event handlers is owned by the informers. If you mutate it in any way, 
+> you risk introducing hard-to-debug cache coherency issues into your application. Always do a deep copy (see “Kubernetes Objects in Go”) before changing an object.
 
-我们在informers的event回调中切记不要修改对象，否则会导致很难排查的缓存一致性问题，如果要修改的化，请先深拷贝，然后修改。
+我们在informers的event回调中切记不要修改对象，否则会导致很难排查的缓存一致性问题，如果要修改的话，请先深拷贝，然后修改。
 
 ```go
 	informerFactory := informers.NewSharedInformerFactory(clientset, time.Second*30)
@@ -561,17 +614,20 @@ It is very important to remember that any object passed from the listers to the 
 informerFactory := informers.NewSharedInformerFactoryWithOptions(clientset, time.Second*30, informers.WithNamespace("default"))
 ```
 
-* object owner
-
-“In general: before mutating an object, always ask yourself who owns this object or the data structures in it. As a rule of thumb:”
-
-1. “Informers and listers own objects they return. Hence, consumers have to deep-copy before mutation.”
-2. “Clients return fresh objects, which the caller owns.”
-3. “Conversions return shared objects. If the caller does own the input object, it does not own the output.”
-
 ![informers](images/informers.jpg)
 
-## Glang type、GroupVersionKind、GroupVerisonResource、HTTP path、Resources
+### Object Owner
+
+通常来说，在修改一个对象之前，我们总是会问自己，这个对象被谁拥有，或者是在哪个数据结构中? 一般来来说原则如下:
+
+1. Informers and listers拥有他们返回的对象，要修改这个对象的时候，需要进行深拷贝
+2. Clients返回的新对象这个属于调用者
+3. Conversions返回的共享对象，如果调用者拥有输入的对象，那么它不拥有输出的共享对象。
+
+### API Machinery in Depth
+
+API Machinery仓库实现了基本的Kubernetes类型系统，但是类型系统是什么呢?  类型这个术语并不在API Machinery仓库中存在。
+在API Machinery类型对应到的是Kinds。
 
 * Kinds
 
@@ -594,7 +650,7 @@ informerFactory := informers.NewSharedInformerFactoryWithOptions(clientset, time
 > 例如: rbac.authorization.k8s.io/v1.clusterroles，映射到HTTP path就是apis/rbac.authorization.k8s.io/v1/clusterroles.
 
 
-## Scheme
+### Scheme
 虽然每一个Object都会包含`TypeMeta`，里面包含了Kind和APIVersion但是实际上，我们去访问的时候，并不会拿到对应的信息，这些信息都是空的，相反我们需要通过scheme来获取对象的Kind
 
 ```go
@@ -626,6 +682,64 @@ type RESTMapping struct {
 
 ![k8s-scheme](images/k8s-scheme.jpg)
 
+
+
+## Chapter4. Using Custom Resources
+
+CRD本身是一个Kubernetes的资源，它描述了在集群中可用的资源，典型的一个CRD定义如下：
+
+```yaml
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: ats.cnat.programming-kubernetes.info
+spec:
+  group: cnat.programming-kubernetes.info
+  names:
+    kind: At
+    listKind: AtList
+    plural: ats
+    singular: at
+  scope: Namespaced
+  subresources:
+	status: {}
+	
+version: v1alpha1
+versions:
+- name: v1alpha1
+  served: true
+  storage: true
+```
+
+注意，这个CRD的名字需要资源名的复数形式，然后跟上API group name，上面的CRD中资源名为at，API Group的名字就是`cnat.programming-kubernetes.info`
+定义完这个CRD后，我们就可以创建一个at资源了。然后通过`kubectl get ats`就可以列出所有创建的at资源。
+
+```yaml
+apiVersion: cnat.programming-kubernetes.info/v1alpha1
+kind: At
+metadata:
+  name: example-at
+spec:
+  schedule: "2020-12-02T00:30:00Z"
+  containers:
+  - name: shell
+    image: centos:7
+    command:
+    - "bin/bash"
+    - "-c"
+    - echo "Kubernetes native rocks!"
+status:
+  phase: "pending"
+```
+
+kubectl是如何找到`ats`资源呢?
+
+
+* 如何找到自定义资源
+1. 通过/apis询问Api server所有的 API group
+2. 通过/apis/group/version 查看所有的group存在的资源，找到对应资源所在的Group、VersionheResources
+
+
 ## Subresources
 
 Subresources就是一个特殊的HTTP endpoints，一般是在正常resource后面添加的一个后缀来表示，比如，对于pod资源来说，正常的HTTP Path是
@@ -637,24 +751,6 @@ Subresources所使用的协议是和主资源不一样的，目前为止自定�
 
 ## CustomResourceDefinition
 
-* 如何找到自定义资源
-1. 通过/apis询问Api server所有的 API group
-2. 通过/apis/group/version 查看所有的group存在的资源，找到对应资源所在的Group、VersionheResources
-
-```yaml
-apiVersion: apiextensions.k8s.io/v1beta1
-kind: CustomResourceDefinition
-metadata:
-  name: ats.cnat.programming-kubernetes.info
-spec:
-  additionalPrinterColumns: (optional)
-  - name: kubectl column name
-    type: OpenAPI type for the column
-    format: OpenAPI format for the column (optional)
-    description: human-readable description of the column (optional)
-    priority: integer, always zero supported by kubectl
-    JSONPath: JSON path inside the CR for the displayed value
-```
 
 每一个自定义资源都可以有subresourcs，默认支持scale、status两类子资源
 

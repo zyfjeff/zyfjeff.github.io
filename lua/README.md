@@ -182,4 +182,3 @@ LUA_GCCOUNTB
 
 lua_gc
 ```
-

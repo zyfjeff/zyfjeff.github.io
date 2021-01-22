@@ -301,6 +301,70 @@ func main() {
 ./escape3.go:14:22: &bytes.Buffer literal does not escape
 ```
 
+5. 赋值给指针导致的逃逸
+
+```go
+func BenchmarkAssignmentIndirect(b *testing.B) {
+	type X struct {
+		p *int
+	}
+	for i := 0; i < b.N; i++ {
+		var i1 int
+		x1 := &X{
+			p: &i1, // GOOD: i1 does not escape
+		}
+		_ = x1
+
+		var i2 int
+		x2 := &X{}
+		x2.p = &i2 // BAD: Cause of i2 escape
+	}
+}
+```
+
+逃逸分析的结果如下[example1_test.go](Lesson2/escape/flaws/example1/example1_test.go)
+
+```bash
+./example1_test.go:5:6: cannot inline BenchmarkAssignmentIndirect: unhandled op DCLTYPE
+./example1_test.go:16:7: i2 escapes to heap:
+./example1_test.go:16:7:   flow: {heap} = &i2:
+./example1_test.go:16:7:     from &i2 (address-of) at ./example1_test.go:18:10
+./example1_test.go:16:7:     from x2.p = &i2 (assign) at ./example1_test.go:18:8
+./example1_test.go:5:34: b does not escape
+./example1_test.go:16:7: moved to heap: i2
+./example1_test.go:11:9: &X literal does not escape
+./example1_test.go:17:9: &X literal does not escape
+```
+
+如果是赋值给指针的指针也是会导致逃逸的。
+
+```go
+package main
+
+func main() {
+	i := 0
+	pp := new(*int)
+	*pp = &i // BAD: i escapes
+	_ = pp
+}
+```
+
+逃逸分析的结果如下[escape4.go](Lesson2/escape/escape3.go)
+
+```bash
+./escape4.go:3:6: can inline main with cost 20 as: func() { i := 0; pp := new(*int); *pp = &i; _ = pp }
+./escape4.go:4:2: i escapes to heap:
+./escape4.go:4:2:   flow: {heap} = &i:
+./escape4.go:4:2:     from &i (address-of) at ./escape4.go:6:8
+./escape4.go:4:2:     from *pp = &i (assign) at ./escape4.go:6:6
+./escape4.go:4:2: moved to heap: i
+./escape4.go:5:11: new(*int) does not escape
+```
+
+
+6. 赋值给
+
+
 对于接口的使用意见:
 
 Use an interface when:
@@ -318,8 +382,232 @@ Don’t use an interface:
 > `go build -gcflags "-m -m"` 添加gcflags可以显示处哪些变量进行了逃逸
 
 
+### Garbage Collection
+
+垃圾回收几个阶段:
+
+1. Mark Setup - STW
+
+在这个阶段需要找到一个安全点，让所有的goroutine都停下来，在1.14之前，Go中的函数调用是一个安全点，当gorountine执行函数调用的时候就停止，但是这个存在一个问题，如果一个goroutine
+一直在做密集的计算，没有进行函数调用，这会导致GC的采集停止不前。在1.14后Go中引入了抢占来解决这个问题。
+
+[runtime: non-cooperative goroutine preemption](https://github.com/golang/go/issues/24543)
+
+2. Marking - Concurrent
+
+在标记阶段，垃圾回收会控制自己所占用的CPU为整体的1/4(其他的CPU用于程序运行)，在这个阶段，GC会扫描goroutine的栈，找到栈中指向堆的指针进行标记。标记阶段的吞吐量为`1MB/ms * 1/4 * CPU核心数`
+如果在标记阶段，应用分配内存的速度大于标记的速度，这个时候会启用`Mark Assist`占用更多的CPU来协助进行标记。但是不会占用太多的`Mark Assist`，与其这样占用太多`Mark Assist`，还不如今早开启下一次GC回收。
+所以GC会控制`Mark Assist`的数量。
+
+
+3. Mark Termination - STW
+
+标记阶段的最后工作是Mark Termination，关闭内存屏障，停止后台标记以及辅助标记，做一些清理工作，整个过程也需要STW，大概需要60-90微秒。在此之后，所有的P都能继续为应用程序G服务了。
+
+4. Sweeping - Concurrent
+
+在标记工作完成之后，剩下的就是清理过程了，清理过程的本质是将没有被使用的内存块整理回收给上一个内存管理层级(mcache -> mcentral -> mheap -> OS)，清理回收的开销被平摊到应用程序的每次内存分配操作中，
+直到所有内存都Sweeping完成。当然每个层级不会全部将待清理内存都归还给上一级，避免下次分配再申请的开销，比如Go1.12对mheap归还OS内存做了优化，使用NADV_FREE延迟归还内存。
+
+
+
+* GC percentage
+runtime中有一个配置选项叫做 GC Percentage，默认值是100。这个值代表了下一次回收开始之前，有多少新的堆内存可以分配。GC Percentage设置为100意味着，基于回收完成之后被标记为生存的堆内存数量，下一次回收的开始必须在有100%以上的新内存分配到堆内存时启动。
+如果新分配的内存并没有到达100%就触发了下一次GC，这个可能是因为应用内存分配速度太快，GC不希望分配太多的`Mark Assist`，因此尽快的启动了下一次GC。
+
+
+* GC Trcae
+
+1. `GODEBUG=gctrace=1` 开启GC Trace
+2. `GODEBUG=gctrace=1,gcpacertrace=1` 开启更详细的GC Trace
+
+```shell
+gc 1405 @6.068s 11%: 0.058+1.2+0.083 ms clock, 0.70+2.5/1.5/0+0.99 ms cpu, 7->11->6 MB, 10 MB goal, 12 P
+gc 1406 @6.070s 11%: 0.051+1.8+0.076 ms clock, 0.61+2.0/2.5/0+0.91 ms cpu, 8->11->6 MB, 13 MB goal, 12 P
+gc 1407 @6.073s 11%: 0.052+1.8+0.20 ms clock, 0.62+1.5/2.2/0+2.4 ms cpu, 8->14->8 MB, 13 MB goal, 12 P
+
+字段含义如下:
+// General
+gc 1405     : The 1405 GC run since the program started
+@6.068s     : Six seconds since the program started
+11%         : Eleven percent of the available CPU so far has been spent in GC
+
+// Wall-Clock
+0.058ms     : STW        : Mark Start       - Write Barrier on
+1.2ms       : Concurrent : Marking
+0.083ms     : STW        : Mark Termination - Write Barrier off and clean up
+
+// CPU Time
+0.70ms      : STW        : Mark Start
+2.5ms       : Concurrent : Mark - Assist Time (GC performed in line with allocation)
+1.5ms       : Concurrent : Mark - Background GC time
+0ms         : Concurrent : Mark - Idle GC time
+0.99ms      : STW        : Mark Term
+
+// Memory
+7MB         : Heap memory in-use before the Marking started
+11MB        : Heap memory in-use after the Marking finished
+6MB         : Heap memory marked as live after the Marking finished
+10MB        : Collection goal for heap memory in-use after Marking finished
+
+// Threads
+12P         : Number of logical processors or threads used to run Goroutines
+```
+
+GC调优的意见:
+
+1. Maintain the smallest heap possible.
+2. Find an optimal consistent pace.
+3. Stay within the goal for every collection.
+4. Minimize the duration of every collection, STW and Mark Assist.
+
+
+## Compiler And Runtime Optimizations
+
+1. Non-scannable objects
+Garbage collector does not scan underlying buffers of slices, channels and maps when element type does not contain pointers (both key and value for maps). 
+垃圾回收期不会扫描元素不是指针类型的map、slices、channnel。下面这个map就不会影响GC的采集时间。
+
+```go
+type Key [64]byte // SHA-512 hash
+type Value struct {
+	Name      [32]byte
+	Balance   uint64
+	Timestamp int64
+}
+m := make(map[Key]Value, 1e8)
+```
+
+2. Function Inlining
+
+只有小的、短的函数才会内联，函数中要小于40个表达式、并且不包含复杂的语句，比如loop、labels、closures、panic、recover、select、switch等
+
+3. `go build -x`
+
+显示build的过程
+
+4. `go build -gcflags="-S"`
+
+显示golang中间汇编结果
+
+5. `go tool objdump -s main.main hello`
+
+二进制反汇编
+
+6. `go tool nm escape1`
+
+查看二进制符号信息
+
+7. `GOSSAFUNC=main go build && open ssa.html`
+
+SSA 代表 static single-assignment，是一种IR(中间表示代码)，要保证每个变量只被赋值一次。
+
+8. `go build -gcflags="-m"`
+
+逃逸分析
+
+9. `go build -gcflags="-l -N"`
+
+禁止优化和禁止内联
+
+
+
+### Constans
+
+在Go中是不能在不同的数字类型的变量之间做操作的，比如不能用float64和int之间做操作，需要强制类型转换，但是有的时候我们发现我们可以做类似`2 * time.Second`、`1 << ('t' + 2.0)`
+这样的操作，这是因为他们都是常量，并非是变量。
+
+* 数字常量可以说是integer, floating-point, complex and rune等四种kind，此外还有bool、string两种kind类型的常量。
+* 常量不是变量
+* 常量只存在于编译时
+* 无类型的常量可以隐式转换为有类型的常量，但是变量不行需要强制转换
+
+```go
+type Duration int64
+// Common durations. There is no definition for units of Day or larger
+// to avoid confusion across daylight savings time zone transitions.
+const (
+        Nanosecond  Duration = 1
+        Microsecond          = 1000 * Nanosecond
+        Millisecond          = 1000 * Microsecond
+        Second               = 1000 * Millisecond
+        Minute               = 60 * Second
+        Hour                 = 60 * Minute
+)
+// Add returns the time t+d.
+func (t Time) Add(d Duration) Time
+
+func main() {
+
+	// Use the time package to get the current date/time.
+	now := time.Now()
+
+	// 这里的5转换成常量Duration了
+	// Subtract 5 nanoseconds from now using a literal constant.
+	literal := now.Add(-5)
+
+	// Subtract 5 seconds from now using a declared constant.
+	const timeout = 5 * time.Second // time.Duration(5) * time.Duration(1000000000)
+	constant := now.Add(-timeout)
+
+	// Subtract 5 nanoseconds from now using a variable of type int64.
+	minusFive := int64(-5)
+	variable := now.Add(minusFive)
+
+	// example4.go:50: cannot use minusFive (type int64) as type time.Duration in argument to now.Add
+
+	// Display the values.
+	fmt.Printf("Now     : %v\n", now)
+	fmt.Printf("Literal : %v\n", literal)
+	fmt.Printf("Constant: %v\n", constant)
+	fmt.Printf("Variable: %v\n", variable)
+}
+```
+
+* 无类型的常量有Kind，但是没有类型
+
+```go
+	// 无类型常量，精度理论上无限制
+	// Untyped Constants.
+	const ui = 12345    // kind: integer
+	const uf = 3.141592 // kind: floating-point
+
+	// 下面就是有类型的常量了，这是有精度限制的，取决于常量类型
+	// Typed Constants still use the constant type system but their precision
+	// is restricted.
+	const ti int = 12345        // type: int
+	const tf float64 = 3.141592 // type: float64
+	// 这里声明uint8的值为1000就超过限制了，会编译报错，但是改成无类型的常量就没有这个限制了
+	// ./constants.go:XX: constant 1000 overflows uint8
+	// const myUint8 uint8 = 1000
+	
+	// 有类型和无类型进行算术运算会进行类型转换。
+	const one int8 = 1
+	const two = 2 * one // int8(2) * int8(1)
+```
+
+* integer常量精度至少256bits
+
+```go
+const (
+	// Max integer value on 64 bit architecture.
+	maxInt = 9223372036854775807
+
+	// Much larger value than int64.
+	bigger = 9223372036854775808543522345
+
+	// 有类型的常量受到了类型的精度限制，无类型常量则没有限制
+	// Will NOT compile
+	// biggerInt int64 = 9223372036854775808543522345
+)
+```
+* 
+
+
 
 ## Reference
 
 * [Contiguous stacks](https://docs.google.com/document/d/1wAaf1rYoM4S4gtnPh0zOlGzWtrZFQ5suE8qr2sD8uWQ/pub)
 * [How Stacks are Handled in Go](https://blog.cloudflare.com/how-stacks-are-handled-in-go/)
+* [gc](https://github.com/qcrao/Go-Questions/blob/master/GC/GC.md)
+* [Go Escape Analysis Flaws](https://docs.google.com/document/d/1CxgUBPlx9iJzkz9JWkb6tIpTe5q32QDmz8l0BouG0Cw/edit)
