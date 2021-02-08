@@ -34,9 +34,19 @@ yum install docker-ce -y
 # Environment="HTTPS_PROXY=http://30.57.177.111:3128"
 
 mkdir -p /etc/docker/
-tee /etc/docker/daemon.json <<-'EOF'
+
+# 设置 Docker daemon
+cat <<EOF | sudo tee /etc/docker/daemon.json
 {
-  "registry-mirrors": ["https://fajbo8jx.mirror.aliyuncs.com"]
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2",
+  "storage-opts": [
+    "overlay2.override_kernel_check=true"
+  ]
 }
 EOF
 systemctl daemon-reload

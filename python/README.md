@@ -106,3 +106,19 @@ True
 
 * 自定义`__eq__`和`__lt__`用来实现自定义排序
 
+* line_profiler、memory_profiler
+
+> pip3 install memory_profiler
+> pip3 install line_profiler
+
+```python
+@profile
+def test():
+    a = x[10:-10]
+    b = x.split(",")
+
+x = "0," * (1 << 20)
+test()
+python3 -m memory_profiler main.py 
+```
+

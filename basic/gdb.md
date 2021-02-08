@@ -9,6 +9,7 @@
 3. set print pretty on
 4. set print vtbl on
 5. set print elements 0 输出全部元素
+6. handle SIGPIPE nostop
 
 ## x command
 x command

@@ -1309,6 +1309,7 @@ pub fn write_record<I, T>(&mut self, record: I) -> csv::Result<()>
 * [Understanding Rust slices](https://codecrash.me/understanding-rust-slices)
 * [Implement a bloom filter](https://onatm.dev/2020/08/10/let-s-implement-a-bloom-filter/)
 * [Frustrated? It's not you, it's Rust](https://fasterthanli.me/articles/frustrated-its-not-you-its-rust)
+* [Clear explanation of Rust’s module system](http://www.sheshbabu.com/posts/rust-module-system/?spm=ata.13261165.0.0.13f861b6Lw1Py4)
 
 
 ## TODO

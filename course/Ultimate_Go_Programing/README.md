@@ -139,6 +139,38 @@ Go中是不允许隐式类型转换的，两个不同的struct即使是具有�
 > 我们应该尽可能去避免使用隐式转换。
 
 
+* Embedded Types
+结构体类型可以包含匿名或嵌入式字段。这也称为嵌入类型，当我们将一个类型嵌入到结构中时，该类型的名称将充当随后嵌入字段的字段名称。
+
+```go
+type Admin struct {
+    User
+    Level string
+}
+```
+
+这并非继承，而是一种组合模式，接着我们来看看如何创建带有嵌入式字段的`struct`
+
+```go
+func main() {
+    admin := &Admin{
+		// 和创建普通的struct一样，使用类型名作为字段名
+        User: User{
+            Name:  "john smith",
+            Email: "john@email.com",
+        },
+        Level: "super",
+    }
+
+    SendNotification(admin)
+}
+
+// Output
+User: Sending User Email To john smith<john@email.com>
+```
+
+通过这种方式的组合，使得Admin实现User所有的接口。
+
 * Reference
 [Understanding Type in Go](https://www.ardanlabs.com/blog/2013/07/understanding-type-in-go.html)
 [Object Oriented Programming in Go](https://www.ardanlabs.com/blog/2013/07/object-oriented-programming-in-go.html)
@@ -462,7 +494,7 @@ GC调优的意见:
 4. Minimize the duration of every collection, STW and Mark Assist.
 
 
-## Compiler And Runtime Optimizations
+### Compiler And Runtime Optimizations
 
 1. Non-scannable objects
 Garbage collector does not scan underlying buffers of slices, channels and maps when element type does not contain pointers (both key and value for maps). 
@@ -516,6 +548,31 @@ SSA 代表 static single-assignment，是一种IR(中间表示代码)，要保�
 
 在Go中是不能在不同的数字类型的变量之间做操作的，比如不能用float64和int之间做操作，需要强制类型转换，但是有的时候我们发现我们可以做类似`2 * time.Second`、`1 << ('t' + 2.0)`
 这样的操作，这是因为他们都是常量，并非是变量。
+
+* 常量存在默认类型
+
+```go
+fmt.Printf("%T %v\n", 0, 0)
+fmt.Printf("%T %v\n", 0.0, 0.0)
+fmt.Printf("%T %v\n", 'x', 'x')
+fmt.Printf("%T %v\n", 0i, 0i)
+	
+// 输出结果
+int 0
+float64 0
+int32 120
+complex128 (0+0i)
+```
+
+
+* 不同类型的常量操作，会进行类型转换
+
+转换规则按照integer, rune, floating-point, complex.的先后顺序
+
+```go
+var answer = 3 * 0.33	// 按照上面的规则，integer会转换为floating-point，最终结果就是浮点数了
+
+```
 
 * 数字常量可以说是integer, floating-point, complex and rune等四种kind，此外还有bool、string两种kind类型的常量。
 * 常量不是变量
@@ -601,8 +658,1264 @@ const (
 	// biggerInt int64 = 9223372036854775808543522345
 )
 ```
-* 
 
+
+### Array
+
+面向数据的设计原则:
+
+* If you don't understand the data, you don't understand the problem.
+* All problems are unique and specific to the data you are working with.
+* Data transformations are at the heart of solving problems. Each function, method and work-flow must focus on implementing the specific data transformations required to solve the problems.
+* If your data is changing, your problems are changing. When your problems are changing, the data transformations needs to change with it.
+* Uncertainty about the data is not a license to guess but a directive to STOP and learn more.
+* Solving problems you don't have, creates more problems you now do.
+* If performance matters, you must have mechanical sympathy for how the hardware and operating system work.
+* Minimize, simplify and REDUCE the amount of code required to solve each problem. Do less work by not wasting effort.
+* Code that can be reasoned about and does not hide execution costs can be better understood, debugged and performance tuned.
+* Coupling data together and writing code that produces predictable access patterns to the data will be the most performant.
+* Changing data layouts can yield more significant performance improvements than changing just the algorithms.
+* Efficiency is obtained through algorithms but performance is obtained through data structures and layouts.
+
+我们在设计数据结构的时候需要考虑数据的存储形式，应该尽可能的考虑到对底层硬件平台的依赖，比如需要考虑到缓存，设计的数据结构需要对缓存友好，
+一般来说，链表的是缓存不友好的，而数组这种连续内存的数据结构是缓存友好的，可以充分利用缓存来加速。
+
+* CPU的缓存主要是通过将主内存中的数据缓存在cache line上
+* Cache line目前一般是32个字节或者是64个字节，这个取决于对应的硬件平台
+* CPU核心不会直接访问主内存，他们往往只能访问本地的缓存
+* 数据和指令都可以存在缓存中
+* 高速缓存行按L1-> L2-> L3的顺序排列，因为新的高速缓存行需要存储在高速缓存中。
+* 硬件喜欢沿着Cache line线性的访问数据和指令
+* 主内存建立在相对较快的廉价内存上。高速缓存建立在非常快速且昂贵的内存上。
+* 访问主内存的速度非常慢，我们需要缓存。
+	* 从主存储器访问一个字节将导致读取并缓存整个缓存行。
+	* 在高速缓存行中写入一个字节需要写入整个高速缓存行。
+* 小 等于 快
+	* 适合放入缓存中紧凑数据结构是最快的
+	* 仅遍历缓存的数据是最快的
+
+* 可预测的访问模式最重要
+	* 只要可行，尽可能使用线性数组遍历
+	* 提供常规的内存访问模式
+	* 硬件可以对所需的内存做出更好的预测
+
+* 缓存未命中也会导致TLB缓存未命中
+	* 将虚拟地址转换为物理地址需要Cache
+	* 需要等待OS告诉我们真正要访问的内存在哪里
+
+```
+3GHz(3 clock cycles/ns) * 4 instructions per cycle = 12 instructions per ns!
+
+1 ns ............. 1 ns .............. 12 instructions  (one) 
+1 µs .......... 1000 ns .......... 12,000 instructions  (thousand)
+1 ms ..... 1,000,000 ns ...... 12,000,000 instructions  (million)
+1 s .. 1,000,000,000 ns .. 12,000,000,000 instructions  (billion)
+
+L1 - 64KB Cache (Per Core)
+	4 cycles of latency at 1.3 ns
+	Stalls for 16 instructions
+
+L2 - 256KB Cache (Per Core)
+	12 cycles of latency at 4 ns
+	Stalls for 48 instructions
+
+L3 - 8MB Cache
+	40 cycles of latency at 13.3 ns
+	Stalls for 160 instructions
+
+Main Memory
+	100 cycle of latency at 33.3 ns
+	Stalled for 400 instructions
+```
+
+```
+L1 cache reference ......................... 0.5 ns ...................  6 ins
+Branch mispredict ............................ 5 ns ................... 60 ins
+L2 cache reference ........................... 7 ns ................... 84 ins
+Mutex lock/unlock ........................... 25 ns .................. 300 ins
+Main memory reference ...................... 100 ns ................. 1200 ins           
+Compress 1K bytes with Zippy ............. 3,000 ns (3 µs) ........... 36k ins
+Send 2K bytes over 1 Gbps network ....... 20,000 ns (20 µs) ........  240k ins
+SSD random read ........................ 150,000 ns (150 µs) ........ 1.8M ins
+Read 1 MB sequentially from memory ..... 250,000 ns (250 µs) .......... 3M ins
+Round trip within same datacenter ...... 500,000 ns (0.5 ms) .......... 6M ins
+Read 1 MB sequentially from SSD* ..... 1,000,000 ns (1 ms) ........... 12M ins
+Disk seek ........................... 10,000,000 ns (10 ms) ......... 120M ins
+Read 1 MB sequentially from disk .... 20,000,000 ns (20 ms) ......... 240M ins
+Send packet CA->Netherlands->CA .... 150,000,000 ns (150 ms) ........ 1.8B ins
+```
+
+* range的语义
+
+```go
+
+// All material is licensed under the Apache License Version 2.0, January 2004
+// http://www.apache.org/licenses/LICENSE-2.0
+
+// Sample program to show how the for range has both value and pointer semantics.
+package main
+
+import "fmt"
+
+func main() {
+
+	// Using the pointer semantic form of the for range.
+	friends := [5]string{"Annie", "Betty", "Charley", "Doug", "Edward"}
+	fmt.Printf("Bfr[%s] : ", friends[1])
+	// 这种是指针语义，通过下标来访问friends，不产生临时变量
+	for i := range friends {
+		friends[1] = "Jack"
+
+		if i == 1 {
+			fmt.Printf("Aft[%s]\n", friends[1])
+		}
+	}
+
+	// Using the value semantic form of the for range.
+	friends = [5]string{"Annie", "Betty", "Charley", "Doug", "Edward"}
+	fmt.Printf("Bfr[%s] : ", friends[1])
+	// 这种是值语义，v每次拷贝friends中的元素，修改friends不会影响v
+	for i, v := range friends {
+		friends[1] = "Jack"
+
+		if i == 1 {
+			fmt.Printf("v[%s]\n", v)
+		}
+	}
+
+	// Using the value semantic form of the for range but with pointer
+	// semantic access. DON'T DO THIS.
+	friends = [5]string{"Annie", "Betty", "Charley", "Doug", "Edward"}
+	fmt.Printf("Bfr[%s] : ", friends[1])
+	// 不要这种写法，会存在data race的，因为v每次拷贝的是friends中元素的指针，修改 friends会影响v
+	for i, v := range &friends {
+		friends[1] = "Jack"
+
+		if i == 1 {
+			fmt.Printf("v[%s]\n", v)
+		}
+	}
+}
+```
+
+### slice
+
+slice、channel、map、function、interface都是引用类型，这些数据结构内部都有指针，默认值是nil。
+
+* nil和empty不一样
+
+```go
+// 这里的s是nil，nil表示slice内部的指针、size、cap等都是0
+var s []string
+// 这里的s是empty，表示内部指针指向了一个全局的位置、size和cap都是0
+s := []string {}
+```
+
+* 通过make来创建slice可以指定length和cap，如果只指定length的话，cap默认等于length
+
+```go
+func main() {
+
+	// Create a slice with a length of 5 elements.
+	fruits := make([]string, 5)
+	fruits[0] = "Apple"
+	fruits[1] = "Orange"
+	fruits[2] = "Banana"
+	fruits[3] = "Grape"
+	fruits[4] = "Plum"
+
+	// 会存在访问越界
+	// You can't access an index of a slice beyond its length.
+	fruits[5] = "Runtime error"
+
+	// Error: panic: runtime error: index out of range
+
+	fmt.Println(fruits)
+}
+```
+
+* slice在cap小于1024的时候总是按照100%来增长，到了1024后则按照25%来增长。
+
+具体细节见[cap.go](Lesson2/cap.go)
+
+* 在slice的基础上可以再创建slice，创建的slice和之前的slice是共享底层的存储
+
+```go
+func main() {
+	orgSlice := make([]string, 5, 8)
+	orgSlice[0] = "Apple"
+	orgSlice[1] = "Orange"
+	orgSlice[2] = "Banana"
+	orgSlice[3] = "Grape"
+	orgSlice[4] = "Plum"
+	fmt.Printf("cap: %d, length: %d\n", cap(orgSlice), len(orgSlice))
+
+	// 可以通过orgSlice[2:4:cap]来指定cap，将cap和length设置为相同，这样就可以在
+	// append的时候避免对原来的slice进行修改。其中cap不能超过原来slice的最大cap范围
+	slice2 := orgSlice[2:4]
+	// length为2，cap为6，这里需要小心了，因为cap和length不相同，因此在append的时候
+	// 不会进行拷贝，而是直接在原来的基础上操作，这个是存在副作用的，会影响到orgSlice，例如下面这个例子
+	fmt.Printf("cap: %d, length: %d\n", cap(slice2), len(slice2))
+
+	//  Append会导致orgSlice中的元素被覆盖
+	slice2 = append(slice2, "test")
+	fmt.Printf("slice2: %v\n", slice2)
+	fmt.Printf("orgSlice: %v %d\n", orgSlice, len(orgSlice))
+
+	slice3 := orgSlice[2:]
+	fmt.Printf("cap: %d, length: %d\n", cap(slice3), len(slice3))
+	// 这里append不会影响orgSlice，因为orgSlice和slice3两个结束位置都是相同的，
+	// 这里的append只会在未使用的区域添加新的元素，orgSlice感知不到。后续orgSlice
+	// 如果也进行append的化，会导致两个Slice的内容相互覆盖了。
+	slice3 = append(slice3, "test3")
+	fmt.Printf("slice3: %v\n", slice3)
+	fmt.Printf("orgSlice: %v %d\n", orgSlice, len(orgSlice))
+
+}
+
+// 输出
+cap: 8, length: 5
+cap: 6, length: 2
+slice2: [Banana Grape test]
+orgSlice: [Apple Orange Banana Grape test]
+cap: 6, length: 3
+slice3: [Banana Grape test test3]
+orgSlice: [Apple Orange Banana Grape test] 5
+```
+
+
+* 引用slice中的元素时需要小心因为append带来的副作用 
+
+```go
+type user struct {
+	likes int
+}
+
+func main() {
+
+	// Declare a slice of 3 users.
+	users := make([]user, 3)
+
+	// Share the user at index 1.
+	// 这里引用了slice中的元素
+	shareUser := &users[1]
+
+	// Add a like for the user that was shared.
+	// 操作引用本身也会导致slice中对应元素发生变化
+	shareUser.likes++
+
+	// Display the number of likes for all users.
+	for i := range users {
+		fmt.Printf("User: %d Likes: %d\n", i, users[i].likes)
+	}
+
+	// Add a new user.
+	// append会导致copy的发生，那么之前对slice中元素的引用和append后的slice是两个独立的slice，互不影响。
+	users = append(users, user{})
+
+	// Add another like for the user that was shared.
+	// 这是在操作append前的slice
+	shareUser.likes++
+
+	// Display the number of likes for all users.
+	fmt.Println("*************************")
+	for i := range users {
+		fmt.Printf("User: %d Likes: %d\n", i, users[i].likes)
+	}
+
+	// Notice the last like has not been recorded.
+}
+
+```
+
+* copy函数只会拷贝两个slice中的最小长度。当两个slice存在重叠的时候，copy函数也可以正确工作
+
+```go
+// Insert inserts the value into the slice at the specified index,
+// which must be in range.
+// The slice must have room for the new element.
+func Insert(slice []int, index, value int) []int {
+    // Grow the slice by one element.
+    slice = slice[0 : len(slice)+1]
+    // Use copy to move the upper part of the slice out of the way and open a hole.
+    copy(slice[index+1:], slice[index:])
+    // Store the new value.
+    slice[index] = value
+    // Return the result.
+    return slice
+}
+```
+
+* 小心slice的迭代，值语义和指针语义
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+
+	// Using the value semantic form of the for range.
+	friends := []string{"Annie", "Betty", "Charley", "Doug", "Edward"}
+	// 值语义，这里会对friends进行拷贝，因此在迭代过程中修改friends不会影响迭代结果的
+	// v每次都会对friends中的元素进行拷贝
+	for _, v := range friends {
+		friends = friends[:2]
+		fmt.Printf("v[%s]\n", v)
+	}
+
+	// Using the pointer semantic form of the for range.
+	friends = []string{"Annie", "Betty", "Charley", "Doug", "Edward"}
+	// 指针语义，friends并不会拷贝，因此迭代器中修改friends会影响迭代
+	for i := range friends {
+		friends = friends[:2]
+		fmt.Printf("v[%s]\n", friends[i])
+	}
+}
+```
+
+* 小心slice迭代，始终只有一个迭代器变量
+
+```go
+type Dog struct {
+    Name string
+    Age int
+}
+
+func main() {
+    jackie := Dog{
+        Name: "Jackie",
+        Age: 19,
+    }
+
+    fmt.Printf("Jackie Addr: %p\n", &jackie)
+
+    sammy := Dog{
+        Name: "Sammy",
+        Age: 10,
+    }
+
+    fmt.Printf("Sammy Addr: %p\n", &sammy)
+
+    dogs := []Dog{jackie, sammy}
+
+    fmt.Println("")
+	// dog每次迭代都会拷贝一次
+    for _, dog := range dogs {
+        fmt.Printf("Name: %s Age: %d\n", dog.Name, dog.Age)
+        fmt.Printf("Addr: %p\n", &dog)	// 这里输出的地址总是一样的
+
+        fmt.Println("")
+	}
+	
+	allDogs := []*Dog{}
+
+	for _, dog := range dogs {
+		// 这里会存在问题，因此存的都是指针，，但是dog变量只有一个，只是每次进行copy，因此这里最终append的都是最后一个元素
+		allDogs = append(allDogs, &dog)
+	}
+
+	for _, dog := range allDogs {
+		fmt.Printf("Name: %s Age: %d\n", dog.Name, dog.Age)
+	}
+}
+```
+
+* string其实就是slice的一个只读版本，也包含了指针和size，但是因为是只读的，所以没有cap字段
+
+```go
+package main
+
+import (
+	"fmt"
+	"unicode/utf8"
+)
+
+func main() {
+
+	// Declare a string with both chinese and english characters.
+	s := "世界 means world"
+
+	// UTFMax is 4 -- up to 4 bytes per encoded rune.
+	var buf [utf8.UTFMax]byte
+
+	// Iterate over the string.
+	// 默认遍历string是按照rune来遍历的，一个rune是一个可变大小。
+	// i指向这个rune在string中的offset
+	for i, r := range s {
+
+		// Capture the number of bytes for this rune.
+		rl := utf8.RuneLen(r)
+
+		// Calculate the slice offset for the bytes associated
+		// with this rune.
+		si := i + rl
+
+		// Copy of rune from the string to our buffer.
+		copy(buf[:], s[i:si])
+
+		// Display the details.
+		fmt.Printf("%2d: %q; codepoint: %#6x; encoded bytes: %#v\n", i, r, r, buf[:rl])
+	}
+}
+```
+
+### map
+
+* map的迭代总是无序的
+* map的key必须是可hash的、而且是可比较的，slice没办法作为key，因为不可比较
+
+```go
+package main
+
+import "fmt"
+
+// user represents someone using the program.
+type user struct {
+	name    string
+	surname string
+}
+
+// users defines a set of users.
+type users []user
+
+func main() {
+
+	// Declare and make a map that uses a slice as the key.
+	// 这里的users是slice，是不可比较的，不能作为key
+	u := make(map[users]int)
+
+	// ./example3.go:22: invalid map key type users
+
+	// Iterate over the map.
+	for key, value := range u {
+		fmt.Println(key, value)
+	}
+}
+
+```
+
+* map中的元素是不可寻址的
+
+```go
+package main
+
+// player represents someone playing our game.
+type player struct {
+	name  string
+	score int
+}
+
+func main() {
+
+	// Declare a map with initial values using a map literal.
+	players := map[string]player{
+		"anna":  {"Anna", 42},
+		"jacob": {"Jacob", 21},
+	}
+
+	// Trying to take the address of a map element fails.
+	anna := &players["anna"]
+	anna.score++
+
+	// ./example4.go:23:10: cannot take the address of players["anna"]
+
+	// Instead take the element, modify it, and put it back.
+	player := players["anna"]
+	player.score++
+	players["anna"] = player
+}
+```
+
+* 空map和nil是不同的
+
+```go
+	// 空map
+	users := make(map[string]user)
+	// nil
+	var users map[string]user
+```
+
+
+### method
+
+* 方法本质上是个带有receive的函数
+* receiver会给方法绑定一个类型，可以是值语义也可以是指针语义
+* 值语义意味着每次方法调用都是通过副本进行操作的
+* 指针语义意味着每次方法调用都是共享相同的实例
+* 坚持给定类型的单一语义并保持一致
+* 用值语义还是指针语义
+	1. 如果类型是一个map、func、chan，不要使用指针语义，如果类型是slice，并且没有reslice或者重新分配slice的需求，也不要使用指针语义
+	2. 如果方法需要修改操作，那么必须使用指针语义
+	3. 如果类型包含了锁、文件fd等不可拷贝的资源则必须要用指针语义
+	4. 如果类型是大型的数据结构或者数组，那么为了效率应该使用指针
+	5. 如果类型是数组或切片，并且其元素是指针，而且可能会被修改，则最好使用指针语义，因为它将使读者更加清楚意图。
+	6. 如果类型是小的数组或者struct中包含了一些基本类型，并且没有指针，也没有可修改的字段。仅仅是一些基本类型，那么使用值语义可以减少gc的压力。
+	7. 最后如有疑问请使用指针语义
+
+
+### interface
+
+* 接口本身就是引用类型，不需要通过指针来共享
+* 如何判断一个类型是否实现了某个接口?
+
+ 1. 对于一个指针来说，其方法集包含了值语义和指针语义作为reciver实现的方法
+ 2. 对于一个值来说，其方法集仅限于使用值语义作为reciver实现的方法
+
+下面这个例子中，user作为值来说，其方法集只有使用值作为receiver的方法，但是User的Notify是用指针作为receiver来实现的，因此user并没有实现Notify接口，
+把它换成指针类型就可以了。
+
+```go
+type User struct {
+    Name string
+    Email string
+}
+
+func SendNotification(notify Notifier) error {
+    return notify.Notify()
+}
+func (u *User) Notify() error {
+    log.Printf("User: Sending User Email To %s<%s>\n",
+        u.Name,
+        u.Email)
+
+    return nil
+}
+
+func main() {
+    user := User{
+        Name:  "janet jones",
+        Email: "janet@email.com",
+    }
+
+    SendNotification(user)
+}
+
+// Output:
+cannot use user (type User) as type Notifier in function argument:
+      User does not implement Notifier (Notify method has pointer receiver)
+```
+
+* 嵌入式类型其包含的方法集和外部类型是什么关系?
+
+```go
+// Admin包含了嵌入式类型User，因此User实现的Notify接口，Admin也实现了。
+type Admin struct {
+    User
+    Level string
+}
+
+func main() {
+    admin := &Admin{
+        User: User{
+            Name:  "john smith",
+            Email: "john@email.com",
+        },
+        Level: "super",
+    }
+
+	SendNotification(admin)
+	// 也可以这样来调用，因为嵌入类型在外部类型中就是一个字段名为类型名的字段。
+	// admin.User.Notify()
+
+}
+
+// Output
+User: Sending User Email To john smith<john@email.com>
+```
+
+> 当我们嵌入一个类型时，该类型的方法成为外部类型的方法，但是当它们被调用时，该方法的接收者是内部类型，而不是外部类型。
+
+给定一个结构类型S和一个名为T的类型，那么该结构体S的方法集为:
+
+ 1. 如果S包含匿名字段T，则`S`和`*S`的方法集会包括以T作为receiver的方法。
+ 2. `*S`还额外包含了以`*T`作为receiver的方法
+
+
+* 外部类型和嵌入式类型实现了相同的interface怎么办?
+
+```go
+func (a *Admin) Notify() error {
+    log.Printf("Admin: Sending Admin Email To %s<%s>\n",
+        a.Name,
+        a.Email)
+
+    return nil
+}
+
+func main() {
+    admin := &Admin{
+        User: User{
+            Name:  "john smith",
+            Email: "john@email.com",
+        },
+        Level: "super",
+    }
+	// 外部类型所实现的方法优先覆盖嵌入式类型
+    SendNotification(admin)
+}
+
+// Output
+Admin: Sending Admin Email To john smith<john@email.com>
+```
+
+* interface会保存值，在调用的时候，使用保存的值来调用
+
+```go
+package main
+
+import "fmt"
+
+type printer interface {
+	print()
+}
+
+type user struct {
+	name string
+}
+
+func (u user) print() {
+	fmt.Println("User Name:", u.name)
+}
+
+func main() {
+	u := user{"Bill"}
+	// 这里会对u进行拷贝，并保存在interface中
+	entities := []printer{
+		u,
+		&u,
+	}
+
+	// 这里修改u，并不会影响已经拷贝的u
+	u.name = "Bill_CHG"
+
+	for _, e := range entities {
+		e.print()
+	}
+}
+```
+
+> 当使用值接收器（值语义）实现接口时，可以在接口内部存储值和地址的副本。但是，当使用指针接收器（指针语义）实现接口时，只能存储地址的副本。
+
+```go
+package main
+
+import "fmt"
+
+type notifier interface {
+	notify()
+}
+
+type duration int
+
+func (d *duration) notify() {
+	fmt.Println("Sending Notification in", *d)
+}
+
+func main() {
+	duration(42).notify()
+}
+// 使用指针作为receiver的时候，是不能将值传递给interface的，必须传递的是一个可以取地址的变量。
+//  duration(42)是一个常量是没有地址的，只存在于编译时
+./prog.go:16:14: cannot call pointer method on duration(42)
+./prog.go:16:14: cannot take the address of duration(42)
+```
+
+* interface是可以比较的，比较的是接口内部存储的数据，而不是接口本身。使用指针语义时，将比较地址。使用值语义时，将比较值。
+
+* 深入interface
+
+```go
+// All material is licensed under the Apache License Version 2.0, January 2004
+// http://www.apache.org/licenses/LICENSE-2.0
+
+// Sample program that explores how interface assignments work when
+// values are stored inside the interface.
+package main
+
+import (
+	"fmt"
+	"unsafe"
+)
+
+// notifier provides support for notifying events.
+type notifier interface {
+	notify()
+}
+
+// user represents a user in the system.
+type user struct {
+	name string
+}
+
+// notify implements the notifier interface.
+func (u user) notify() {
+	fmt.Println("Alert", u.name)
+}
+
+func inspect(n *notifier, u *user) {
+	// 一个interface两个字大小，第一个字存储方法集，第二个字存储值
+	word := uintptr(unsafe.Pointer(n)) + uintptr(unsafe.Sizeof(&u))
+	// 可以看到interface始终存储地址，只是这个地址指向的内容到底是值拷贝后的对象，还是指针拷贝后的对象。
+	value := (**user)(unsafe.Pointer(word))
+	fmt.Printf("Addr User: %p  Word Value: %p  Ptr Value: %v\n", u, *value, **value)
+}
+
+func main() {
+
+	// Create a notifier interface and concrete type value.
+	var n1 notifier
+	u := user{"bill"}
+
+	// Store a copy of the user value inside the notifier
+	// interface value.
+	n1 = u
+
+	// We see the interface has its own copy.
+	// Addr User: 0x1040a120  Word Value: 0x10427f70  Ptr Value: {bill}
+	// 通过输出结果可值，interface中存储的值和赋值过来的值不一样，因此其指向的是拷贝后的值
+	inspect(&n1, &u)
+
+	// Make a copy of the interface value.
+	n2 := n1
+
+	// We see the interface is sharing the same value stored in
+	// the n1 interface value.
+	// Addr User: 0x1040a120  Word Value: 0x10427f70  Ptr Value: {bill}
+	// 指针赋值后，大家都是指向相同的值
+	inspect(&n2, &u)
+
+	// Store a copy of the user address value inside the
+	// notifier interface value.
+	n1 = &u
+
+	// We see the interface is sharing the u variables value
+	// directly. There is no copy.
+	// Addr User: 0x1040a120  Word Value: 0x1040a120  Ptr Value: {bill}
+	// 当传递指针的时候，interface中存储的就是地址了。
+	inspect(&n1, &u)
+}
+// Output
+Addr User: 0xc000010200  Word Value: 0xc000068f68  Ptr Value: {bill}
+Addr User: 0xc000010200  Word Value: 0xc000068f68  Ptr Value: {bill}
+Addr User: 0xc000010200  Word Value: 0xc000010200  Ptr Value: {bill}
+```
+
+### reflection
+
+1. 反射是interface到反射对象的转换
+
+```go
+package main
+
+import (
+    "fmt"
+    "reflect"
+)
+
+func main() {
+	var x float64 = 3.4
+	// TypeOf的参数是interface{},任意输入都会转换为interface{}
+	// 然后通过反射获取到类型信息
+	fmt.Println("type:", reflect.TypeOf(x))
+	fmt.Println("value:", reflect.ValueOf(x).String())
+	v := reflect.ValueOf(x)
+	fmt.Println("type:", v.Type())
+	fmt.Println("kind is float64:", v.Kind() == reflect.Float64)
+	fmt.Println("value:", v.Float())
+}
+
+func TypeOf(i interface{}) Type
+```
+
+获取反射对象的值或者给对象设置值时，这些方法的参数或者返回值的类型是可容纳该值的最大类型上：
+例如，所有有符号整数的是int64。也就是说，反射对象的Int方法返回一个int64，而SetInt值接收一个int64作为参数，例如下面这个例子:
+
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	var x uint8 = 'x'
+	v := reflect.ValueOf(x)
+	fmt.Println("type:", v.Type())                            // uint8.
+	fmt.Println("kind is uint8: ", v.Kind() == reflect.Uint8) // true.
+	// 获取值的时候，Uint返回的是uint64，因此这里需要转型
+	x = uint8(v.Uint())                                       // v.Uint returns a uint64.
+}
+
+```
+
+通过反射获取到的类型是其底层的真实类型，而不是类型别名
+
+```go
+type MyInt int
+var x MyInt = 7
+// v.Kind == reflect.Int
+v := reflect.ValueOf(x)
+```
+
+2. 反射也可以从反射对象转换为interface
+
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	var x uint8 = 'x'
+	v := reflect.ValueOf(x)
+	// 将反射对象变成了interface，然后传递给了Println
+    fmt.Println(v.Interface())
+}
+```
+
+3. 要修改反射对象，该值必须可设置。
+
+可设置是反射对象的属性，并非所有反射对象都具有它。
+
+```go
+package main
+
+import (
+	"reflect"
+	"fmt"
+)
+
+func main() {
+	var x float64 = 3.4
+	// 这里是将x传递给了ValueOf进行拷贝才有了反射对象v，因为通过v修改值也只是对拷贝进行了修改，并不是修改x本身
+	// 因此v不具有可设置值的属性
+	v := reflect.ValueOf(x)
+	// settability of v: false
+	fmt.Println("settability of v:", v.CanSet())
+	// panic: reflect.Value.SetFloat using unaddressable value
+	v.SetFloat(7.1) // Error: will panic.
+}
+```
+
+改成下面这样就可以设置值了
+
+```go
+	var x float64 = 3.4
+	// 反射对象p本身是不可设置的，其指向的元素才是可设置的。因为p的类型是*float64
+	// 指针的值是没办法修改的，修改指针的值只会导致指向另外一个对象
+	// 通过Elem可以获取到其指向的值，也就是*p，*p才是可以设置的。
+	p := reflect.ValueOf(&x) // Note: take the address of x.
+	// type of p: *float64
+	// settability of p: false
+	fmt.Println("type of p:", p.Type())
+	fmt.Println("settability of p:", p.CanSet())
+
+	v := p.Elem()
+	fmt.Println("settability of v:", v.CanSet())
+	v.SetFloat(7.1)
+	fmt.Println(v.Interface())
+	fmt.Println(x)
+```
+
+此外，还可以通过反射来修改struct的值，struct中的大写开头的字段才是导出字段，是可以被修改的，其他的字段是不具备可设置属性的
+
+```go
+type T struct {
+    A int
+    B string
+}
+t := T{23, "skidoo"}
+s := reflect.ValueOf(&t).Elem()
+typeOfT := s.Type()
+for i := 0; i < s.NumField(); i++ {
+	// 获取到字段
+    f := s.Field(i)
+    fmt.Printf("%d: %s %s = %v\n", i,
+        typeOfT.Field(i).Name, f.Type(), f.Interface())
+}
+```
+
+
+## exporting
+
+* package是go的基本编译单元，
+* 代码被编译到package中，并最终链接在一起
+* 标识符根据字母大小写导出（或保持未导出）
+* 通过import导入package，就可以访问这个package中已经导出的标识符了
+* 任何包都可以使用未导出类型的值，但是使用起来很烦人
+
+```go
+ 
+package counters
+
+// alertCounter is an unexported type that
+// contains an integer counter for alerts.
+type alertCounter int
+
+// NewAlertCounter creates and returns objects of
+// the unexported type alertCounter.
+func NewAlertCounter(value int) alertCounter {
+	return alertCounter(value)
+}
+
+// 间接访问未导出的标识符
+package main
+
+import (
+	"fmt"
+	"test/counters"
+)
+
+func main() {
+	// Create a variable of the unexported type using the
+	// exported NewAlertCounter function from the package counters.
+	counter := counters.NewAlertCounter(10)
+
+	fmt.Printf("Counter: %d\n", counter)
+}
+
+```
+
+* struct的字段名或者方法名如果是小写是无法被外部直接访问的
+* 如果struct中嵌入的类型是未导出的，则无法直接初始化，需要显示的访问嵌入式类型中导出的字段来初始化
+
+```go
+package animals
+
+// animal represents information about all animals.
+type animal struct {
+	Name string
+	Age  int
+}
+
+// Dog represents information about dogs.
+type Dog struct {
+	animal
+	BarkStrength int
+}
+
+package main
+
+import (
+	"fmt"
+	"test/animals"
+)
+
+func main() {
+	// Create an object of type Dog from the animals package.
+	// This will NOT compile.
+	dog := animals.Dog{
+		// 无法编译
+		animal: animals.animal{
+			Name: "Chole",
+			Age:  1,
+		},
+		BarkStrength: 10,
+	}
+
+	fmt.Printf("Counter: %#v\n", dog)
+
+	// Create an object of type Dog from the animals package.
+	dog := animals.Dog{
+		BarkStrength: 10,
+	}
+	// 显示访问导出字段来进行初始化
+	dog.Name = "Chole"
+	dog.Age = 1
+
+	fmt.Printf("Counter: %#v\n", dog)
+}
+
+```
+
+### Composition
+
+* 行为的组合，而不是数据的组合
+* 组合超越了类型嵌入
+* 考虑将行为定义成一个个独立的intreface，然后通过接口组合形成功能更大的接口
+
+```go
+// NailDriver represents behavior to drive nails into a board.
+type NailDriver interface {
+	DriveNail(nailSupply *int, b *Board)
+}
+
+// NailPuller represents behavior to remove nails into a board.
+type NailPuller interface {
+	PullNail(nailSupply *int, b *Board)
+}
+
+// NailDrivePuller represents behavior to drive and remove nails into a board.
+type NailDrivePuller interface {
+	NailDriver
+	NailPuller
+}
+```
+
+* 确保每个函数或方法对于它们接受的接口类型都是非常特定的。仅接受您在该函数或方法中使用的行为的接口类型。这将有助于确定所需的较大接口类型。
+* 类型嵌入不是子类型、也不是子类。
+
+```go
+// 面向对象的这种继承的风格
+type Animal struct {
+	Name string
+	IsMamal bool
+}
+
+func (a Animal) Speak() {}
+
+type Dog struct {
+	Animal
+	PackFactor int
+}
+func (d Dog) Speak() {}
+
+// 基于行为的风格
+type Speaker interface {
+	Speak()
+}
+
+type Dog struct {
+	Name string
+	IsMamal bool
+	PackFactor int
+}
+
+func (d Dog) Speak() {}
+
+```
+
+* 是否有必要添加一个接口，checklist如下:
+
+	1. package声明了一个接口，该接口与其具体类型的整个API相匹配。
+	2. factory函数返回的类型是内部未导出的类型
+	3. 可以删除该接口，并且对于API用户而言，没有任何更改。
+	4. 接口未将API与更改分离
+
+满足上面条件则没有必要声明接口，下面这个checklist则是需要使用接口的场景:
+	1. API的用户需要提供实现细节的时候
+	2. APi有多个实现的时候
+	3. 识别出API中可以更改的部分并需要将其去耦合
+
+* intreface conversion
+
+```go
+package main
+
+import "fmt"
+
+// Mover provides support for moving things.
+type Mover interface {
+	Move()
+}
+
+// Locker provides support for locking and unlocking things.
+type Locker interface {
+	Lock()
+	Unlock()
+}
+
+// MoveLocker provides support for moving and locking things.
+type MoveLocker interface {
+	Mover
+	Locker
+}
+
+// bike represents a concrete type for the example.
+type bike struct{}
+
+// Move can change the position of a bike.
+func (bike) Move() {
+	fmt.Println("Moving the bike")
+}
+
+// Lock prevents a bike from moving.
+func (bike) Lock() {
+	fmt.Println("Locking the bike")
+}
+
+// Unlock allows a bike to be moved.
+func (bike) Unlock() {
+	fmt.Println("Unlocking the bike")
+}
+
+func main() {
+
+
+	var ml MoveLocker
+	var m Mover
+
+	// bike实现了move、lock、unlock，满足MoveLocker接口
+	ml = bike{}
+
+	// 可以隐式转换为接口的子集。
+	// Move接口是MoveLocker接口的子集
+	m = ml
+
+	// 但是反过来不可以。
+	ml = m
+	
+	// 将接口转换为具体的值
+	b := m.(bike)
+	ml = b
+}
+
+```
+
+* Runtime Type Assertions
+
+```go
+// car represents something you drive.
+type car struct{}
+
+// String implements the fmt.Stringer interface.
+func (car) String() string {
+	return "Vroom!"
+}
+
+mvs fmt.Stringer := car{}
+
+if v, is := mvs.(car); is {
+	fmt.Printf("Type assertion success")
+}
+```
+
+## Error Handing
+
+1. 当错误的上下文比较复杂的时候，通过创建自定义的错误类型类似承载
+
+```go
+type SyntaxError struct {
+    msg    string // description of error
+    Offset int64  // error occurred after reading Offset bytes
+}
+
+func (e *SyntaxError) Error() string { return e.msg }
+```
+
+2. 对于一些静态的、简单的错误可以直接使用标准库中的error
+
+```go
+func Sqrt(f float64) (float64, error) {
+    if f < 0 {
+        return 0, errors.New("math: square root of negative number")
+    }
+}
+```
+
+3. 统一定义Package级别的错误(Err前缀，这是go定义错误的命名规范)
+
+
+```go
+var (
+    ErrInvalidUnreadByte = errors.New("bufio: invalid use of UnreadByte")
+    ErrInvalidUnreadRune = errors.New("bufio: invalid use of UnreadRune")
+    ErrBufferFull        = errors.New("bufio: buffer full")
+    ErrNegativeCount     = errors.New("bufio: negative count")
+)
+
+data, err := b.Peek(1)
+if err != nil {
+    switch err {
+    case bufio.ErrNegativeCount:
+        // Do something specific.
+        return
+    case bufio.ErrBufferFull:
+        // Do something specific.
+        return
+    default:
+        // Do something generic.
+        return
+    }
+}
+```
+
+4. 小心error的比较
+
+error是个interface，intreface的比较要看其内部存储的是值还是指针，实际比较的时候是用内部存储的类型来比较的，如果存储的指针，那么总是不相同，
+如果存储的是值会进行值的比较。
+
+```go
+package main
+
+import "errors"
+import "fmt"
+
+func main() {
+  // errors.New返回的interface内部存储的是指针
+  a := errors.New("same thing");
+  b := errors.New("same thing");
+
+  if a == b {
+    fmt.Printf("same")
+  } else {
+    fmt.Printf("no")
+  }
+}
+
+
+type ErrNumber int64
+
+func (e ErrNumber) Error() string {
+	return "error number"
+}
+
+func main() {
+	// 比较的是ErrNumber的值，因为ErrNumber是值类型存储在intreface中
+	var err1 error = ErrNumber(5)
+	var err2 error = ErrNumber(5)
+
+	if err1 == err2 {
+		fmt.Printf("same")
+	} else {
+
+		fmt.Printf("no")
+	}
+
+}
+
+```
+
+> 一旦我们使用指针作为receve就标志着我们只能存储指针到interface中，因此这个时候比较interface就总是比较指针了。
+> 这种情况下，可以预先在pacakge级别定义好一系列的错误。这样就可以进行比较了，因为此时的接口都是指向相同的错误变量
+
+5. 小心error的赋值
+
+error是个interface，一个interface通常来说内部有两个指针，一个指针指向类型，一个指针指向值，当我们将一个自定义的error类型的nil指针赋值给error的时候，
+实际上其类型部分已经不是nil了，只是值的部分是nil而已。一个intreface如果是nil的话，就必须内部的所有指针都是nil。 
+
+```go
+
+type ErrNumber struct {
+	number int64
+}
+
+func (e *ErrNumber) Error() string {
+	return "error number"
+}
+
+func main() {
+
+	var err *ErrNumber = nil
+	var err2 error = err
+
+	// 这里会输出not nil，因为err2的类型部分指向了ErrNumber，只是值的部分是nil而已。
+	if err2 != nil {
+		fmt.Printf("not nil")
+	} else {
+		fmt.Printf("nil")
+	}
+}
+
+```
+
+6. `github.com/pkg/errors`
+
+log和error是需要一起处理的，error的地方都是需要记录日志的，记录的日志需要能够帮助我们debug问题。
 
 
 ## Reference

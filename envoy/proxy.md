@@ -2942,7 +2942,6 @@ void ClusterManagerInitHelper::initializeSecondaryClusters() {
 
 
 
-
   ## TLS证书
 
 
@@ -3168,6 +3167,46 @@ Host信息发生变化
 
 ## 连接池
 
+## FilterChain
+
+
+FilterChainFactory接口，通过这个接口可以创建Network filter chain、Listener filter chain、Udp listener filter chain
+
+```C++
+/**
+ * Creates a chain of network filters for a new connection.
+ */
+class FilterChainFactory {
+public:
+  virtual ~FilterChainFactory() = default;
+
+  /**
+   * Called to create the network filter chain.
+   * @param connection supplies the connection to create the chain on.
+   * @param filter_factories supplies a list of filter factories to create the chain from.
+   * @return true if filter chain was created successfully. Otherwise
+   *   false, e.g. filter chain is empty.
+   */
+  virtual bool createNetworkFilterChain(Connection& connection,
+                                        const std::vector<FilterFactoryCb>& filter_factories) PURE;
+
+  /**
+   * Called to create the listener filter chain.
+   * @param listener supplies the listener to create the chain on.
+   * @return true if filter chain was created successfully. Otherwise false.
+   */
+  virtual bool createListenerFilterChain(ListenerFilterManager& listener) PURE;
+
+  /**
+   * Called to create a Udp Listener Filter Chain object
+   *
+   * @param udp_listener supplies the listener to create the chain on.
+   * @param callbacks supplies the callbacks needed to create a filter.
+   */
+  virtual void createUdpListenerFilterChain(UdpListenerFilterManager& udp_listener,
+                                            UdpReadFilterCallbacks& callbacks) PURE;
+};
+```
 
 
 ## Extension Config Discovery Service

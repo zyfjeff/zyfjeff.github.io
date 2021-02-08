@@ -505,8 +505,6 @@ var _ 接口类型 = &具体实现的struct{}
 * Marking - Concurrent
 * Mark Termination - STW
 
-
-
 ## 如何保证文件锁不会释放
 
 
@@ -555,4 +553,13 @@ func (s *Server) addFileWatcher(file string, callback func()) {
 		}
 	}()
 }
+```
+
+## 指针的原子更新
+
+```go
+// 原子更新
+atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&w.MeshConfig)), unsafe.Pointer(meshConfig))
+// 原子读
+(*meshconfig.MeshConfig)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&w.MeshConfig))))
 ```

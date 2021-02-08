@@ -200,3 +200,12 @@ int main(int argc, char **argv)
 
 ## xstat
 https://man7.org/linux/man-pages/man2/statx.2.html
+
+
+## Restartable sequences
+https://lwn.net/Articles/650333/
+
+
+
+## 未归类的
+https://lwn.net/Articles/789623/
