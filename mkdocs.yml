@@ -1,6 +1,7 @@
 site_name: 程序员的Cookbook
 theme:
   name: material
+  custom_dir: overrides
   language: zh
   features:
     - navigation.tabs
@@ -11,9 +12,11 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/zyfjeff
+  disqus: zyfjeff
 
 copyright: Copyright &copy; 2020 - 2021 程序员的Cookbook
 
 repo_url: https://github.com/zyfjeff/zyfjeff.github.io
 repo_name: zyfjeff/zyfjeff.github.io
-edit_uri: master/docs/
+edit_uri: edit/master/docs/
+site_url: https://zyfjeff.github.io
