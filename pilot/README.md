@@ -1199,8 +1199,9 @@ func (ps *PushContext) initSidecarScopes(env *Environment) error {
 		return err
 	}
 
-	sortConfigByCreationTime(sidecarConfigs)
+	sortConfigByCreationTime(sidecarConfigs)samples/helloworld/helloworld.yaml
 
+	// 统计带有Workselecor和不带Workselector的Sidecar config
 	sidecarConfigWithSelector := make([]config.Config, 0)
 	sidecarConfigWithoutSelector := make([]config.Config, 0)
 	sidecarsWithoutSelectorByNamespace := make(map[string]struct{})
@@ -1219,6 +1220,7 @@ func (ps *PushContext) initSidecarScopes(env *Environment) error {
 	sidecarConfigs = append(sidecarConfigs, sidecarConfigWithSelector...)
 	sidecarConfigs = append(sidecarConfigs, sidecarConfigWithoutSelector...)
 
+	// 按照Namespace纬度组织SidecarScope
 	ps.sidecarsByNamespace = make(map[string][]*SidecarScope, sidecarNum)
 	for _, sidecarConfig := range sidecarConfigs {
 		sidecarConfig := sidecarConfig
@@ -1226,6 +1228,7 @@ func (ps *PushContext) initSidecarScopes(env *Environment) error {
 			ConvertToSidecarScope(ps, &sidecarConfig, sidecarConfig.Namespace))
 	}
 
+	// 找到Root Namespace下的Sidecar config
 	// Hold reference root namespace's sidecar config
 	// Root namespace can have only one sidecar config object
 	// Currently we expect that it has no workloadSelectors
@@ -1243,12 +1246,14 @@ func (ps *PushContext) initSidecarScopes(env *Environment) error {
 	// build sidecar scopes for namespaces that do not have a non-workloadSelector sidecar CRD object.
 	// Derive the sidecar scope from the root namespace's sidecar object if present. Else fallback
 	// to the default Istio behavior mimicked by the DefaultSidecarScopeForNamespace function.
+	// 统计所有的Namespace
 	namespaces := sets.NewSet()
 	for _, nsMap := range ps.ServiceIndex.HostnameAndNamespace {
 		for ns := range nsMap {
 			namespaces.Insert(ns)
 		}
 	}
+	// 在没有WorkSelector的Namespace下添加Root SidecarScope
 	for ns := range namespaces {
 		if _, exist := sidecarsWithoutSelectorByNamespace[ns]; !exist {
 			ps.sidecarsByNamespace[ns] = append(ps.sidecarsByNamespace[ns], ConvertToSidecarScope(ps, rootNSConfig, ns))
@@ -1258,6 +1263,8 @@ func (ps *PushContext) initSidecarScopes(env *Environment) error {
 	return nil
 }
 ```
+
+> 总结来说，带有WorkloadSelector优先
 
 当Proxy连接上来的时候会给其生成Sidecar
 
@@ -1275,7 +1282,6 @@ func (node *Proxy) SetSidecarScope(ps *PushContext) {
 	node.PrevSidecarScope = sidecarScope
 }
 ```
-
 ## Debounce
 
 1. 配置发生变更的时候，通过注册的handler，调用ConfigUpdate
@@ -1479,6 +1485,8 @@ func (sc *SidecarScope) DependsOnConfig(config ConfigKey) bool {
 	return exists
 }
 ```
+
+## Virtual Service
 
 ## Debug tools
 

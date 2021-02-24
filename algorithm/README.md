@@ -82,6 +82,12 @@ while (true) {
 就会导致这个机器被再次选中。
 
 
+3. Shuffle sharding
+
+* [使用随机分区进行工作负载隔离](https://sre.google/sre-book/load-balancing-datacenter/)
+* [Load Balancing in the Datacenter](https://aws.amazon.com/cn/builders-library/workload-isolation-using-shuffle-sharding/)
+* [Consistent Hashing: Algorithmic Tradeoffs](https://medium.com/@dgryski/consistent-hashing-algorithmic-tradeoffs-ef6b8e2fcae8)
+
 ## HashTable/HashMap
 
 hash map或者说是hash table通常来说是用于实现高效率查找的一个数据结构，他的核心在于hash算法和数据结构，以及如何处理hash冲突等。典型的实现方式如下:

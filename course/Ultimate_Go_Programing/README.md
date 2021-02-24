@@ -101,6 +101,44 @@ Rules of Performance:
 * When variables are being declared to their zero value, use the keyword var.
 * When variables are being declared and initialized, use the short variable declaration operator.
 
+* 小心`:=`赋值
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	var data []string
+
+	killswitch := os.Getenv("KILLSWITCH")
+
+	if killswitch == "" {
+		fmt.Println("kill switch is off")
+		// data被当作全新的变量，覆盖了上面的data
+		data, err := getData()
+
+		if err != nil {
+			panic("ERROR!")
+		}
+
+		fmt.Printf("Data was fetched! %d\n", len(data))
+	}
+
+	for _, item := range data {
+		fmt.Println(item)
+	}
+}
+
+func getData() ([]string, error) {
+	// Simulating getting the data from a datasource - lets say a DB.
+	return []string{"there","are","no","strings","on","me"}, nil
+}
+```
+
 #### Reference
 
 [What's in a name?](https://talks.golang.org/2014/names.slide#1)
@@ -1917,6 +1955,594 @@ func main() {
 
 log和error是需要一起处理的，error的地方都是需要记录日志的，记录的日志需要能够帮助我们debug问题。
 
+7. 面向失败编程，而不是成功，因此Go没有实现异常。
+
+8. 错误处理方式的进化之路
+
+```go
+// Get fetches and unmarshals the JSON blob for the key k into v.
+// If the key is not found, Get reports a "key not found" error.
+func (tx *Tx) Get(k string, v interface{}) (err error)
+
+// 第一种方式，不推荐，错误信息不够，而且也强耦合错误类型
+var ErrNotFound = errors.New("taildb: key not found")
+var val Value
+if err := tx.Get("my-key", &val); err == taildb.ErrNotFound {
+	// no such key
+} else if err != nil {
+	// something went very wrong
+} else {
+	// use val
+}
+
+// 第二种方式，通过定义错误类型，可以承载更多的错误上下文，但是仍然存在问题
+// 当有人在这个错误的基础上又添加了错误，那么在得到错误的时候就不知道到底是何种类型了
+type KeyNotFoundError struct {
+	Name string
+}
+
+func (e KeyNotFoundError) Error() string {
+	return fmt.Errorf("taildb: key %q not found")
+}
+
+var val Value
+err := tx.Get("my-key", &val)
+if err != nil {
+	if _, isNotFound := err.(taildb.KeyNotFoundError); isNotFound {
+		// no such key
+	} else {
+		// something went very wrong
+	}
+} else {
+	// use val
+}
+
+func accessCheck(tx *taildb.Tx, key string) error {
+	var val Value
+	if err := tx.Get(key, &val); err != nil {
+		// 错误类型再次被封装了，调用accessCheck的地方就没办法拿到真实的错误了。
+		return fmt.Errorf("access check: %v", err)
+	}
+	if !val.AccessGranted {
+		return errAccessDenied
+	}
+	return nil
+}
+
+
+// 第三种方式 通过xerrors库可以保留底层的错误类型，这样我们在调用的地方就可以进行转换了。
+// xerrors在1.13的时候将会成为标准库的一部分，届时通过fmt.Errorf("%w")同样可以实现相同的效果。
+if err := tx.Get(key, &val); err != nil {
+	return xerrors.Errorf("access check: %w", err)
+}
+
+var val Value
+if err := accessCheck(tx, "my-key"); err != nil {
+	var notFoundErr taildb.KeyNotFoundError
+	if xerrors.As(err, &notFoundErr) {
+		// no such key
+	} else {
+		// something went very wrong
+	}
+} else {
+	// use val
+}
+
+
+
+// 第四种方式，对xerrors的使用做了优化
+var ErrNotFound = errors.New("key not found")
+Inside taildb we can write:
+
+func (tx *Tx) Get(k string, v interface{}) (err error) {
+	// ...
+	if noSuchKey {
+		return xerrors.Errorf("taildb: %q: %w", k, ErrNotFound)
+	}
+}
+
+var val Value
+if err := accessCheck(tx, "my-key"); xerrors.Is(err, taildb.ErrNotFound) {
+	// no such key
+} else if err != nil {
+	// something went very wrong
+} else {
+	// use val
+}
+```
+
+## Pacakgeing
+
+```bash
+Kit                     Application
+
+├── CONTRIBUTORS        ├── cmd/
+├── LICENSE             ├── internal/
+├── README.md           │   └── platform/
+├── cfg/                └── vendor/
+├── examples/
+├── log/
+├── pool/
+├── tcp/
+├── timezone/
+├── udp/
+└── web/
+```
+
+* `vendor/` 所有依赖的三方库的包都需要copy到这个目录下
+* `cmd` 所有的项目二进制都放在这个目录下，这个目录下对于每一个二进制程序有单独的目录。
+* `internal` 需要被多个程序用到的package属于这个目录，使用名称`internal/`的一个好处是，项目从编译器中获得了额外的保护。
+			 此项目外部的任何软件包都不能从`internal/`内部导入软件包。因此，这些软件包仅在此项目内部。
+* `internal/platform` 基础但特定于项目的软件包位于`internal/platform/`文件夹中。这些软件包将为数据库，身份验证甚至邮件处理等提供支持。
+
+
+
+## Goroutines And Concurrency
+Goroutines是由Go调度程序创建并独立运行的函数。 Go调度程序负责goroutine的管理和执行。
+
+* Goroutines简称为G、Goroutines运行在逻辑处理器上，简称为P，而这个逻辑的处理器和OS提供的Thread绑定在一起，这个Thread简称为M，而这个Thread则有OS负责绑定到一个处理器上运行。
+
+* `GODEBUG=schedtrace=1000` 输出go runtime的调度trace信息，每隔1000微妙
+
+```bash
+SCHED 0ms: gomaxprocs=1 idleprocs=0 threads=2 spinningthreads=0 idlethreads=0
+runqueue=0 [1]
+
+SCHED 1009ms(程序运行到现在的时间): gomaxprocs=1(配置的逻辑处理器数量) idleprocs=0 (有多少处理器是闲置的)
+threads=3(总共有三个线程运行，其中二个是服务go runtime的，另外一个才是绑定到处理器上运行) spinningthreads=0 idlethreads=1(有多少个线程闲置) runqueue=0(有多少协程在全局运行队列) [9](有多少个协程在本地运行队列)
+```
+
+```bash
+SCHED 2002ms: gomaxprocs=2 idleprocs=0 threads=4 spinningthreads=0
+idlethreads=1 runqueue=0 [4 4]
+
+2002ms        : 在程序运行了2s左右输出的trace信息
+gomaxprocs=2  : 配置了2个逻辑处理器
+threads=4     : 有四个线程在运行，2个服务于go runtime，还有2个服务于处理器
+idlethreads=1 : 有1个线程是闲置的
+idleprocs=0   : 有0个处理器是处于闲置状态
+runqueue=0    : 有0个协程在全局运行队列中
+[4 4]         : 每一个处理器上的本地运行队列中都有4个协程在等待被运行。
+```
+
+* `GODEBUG=schedtrace=1000,scheddetail=1` 显示等详细的调度trace信息
+
+```bash
+SCHED 4028ms: gomaxprocs=2 idleprocs=0 threads=4 spinningthreads=0
+idlethreads=1 runqueue=2 gcwaiting=0 nmidlelocked=0 stopwait=0 sysmonwait=0
+P0: status=1 schedtick=10 syscalltick=0 m=3 runqsize=3 gfreecnt=0
+P1: status=1 schedtick=10 syscalltick=1 m=2 runqsize=3 gfreecnt=0
+M3: p=0 curg=4 mallocing=0 throwing=0 gcing=0 locks=0 dying=0 helpgc=0 spinning=0 blocked=0 lockedg=-1
+M2: p=1(表示这个线程绑定在哪个处理器上了) curg=10 mallocing=0 throwing=0 gcing=0 locks=0 dying=0 helpgc=0 spinning=0 blocked=0 lockedg=-1
+M1: p=-1 curg=-1 mallocing=0 throwing=0 gcing=0 locks=1 dying=0 helpgc=0 spinning=0 blocked=0 lockedg=-1
+M0: p=-1 curg=-1 mallocing=0 throwing=0 gcing=0 locks=0 dying=0 helpgc=0 spinning=0 blocked=0 lockedg=-1
+G1: status=4(semacquire) m=-1 lockedm=-1
+G2: status=4(force gc (idle)) m=-1 lockedm=-1
+G3: status=4(GC sweep wait) m=-1 lockedm=-1
+G4: status=2(sleep) m=3 lockedm=-1
+G5: status=1(sleep) m=-1 lockedm=-1
+G6: status=1(stack growth) m=-1 lockedm=-1
+G7: status=1(sleep) m=-1 lockedm=-1
+G8: status=1(sleep) m=-1 lockedm=-1
+G9: status=1(stack growth) m=-1 lockedm=-1
+G10: status=2(sleep) m=2(表示这个协程此时在哪个线程中运行) lockedm=-1
+G11: status=1(sleep) m=-1 lockedm=-1
+G12: status=1(sleep) m=-1 lockedm=-1
+G13: status=1(sleep) m=-1 lockedm=-1
+G17: status=4(timer goroutine (idle)) m=-1 lockedm=-1
+```
+
+P表示处理器、M表示线程、G表示协程。
+
+```bash
+status: http://golang.org/src/runtime/
+Gidle,            // 0
+Grunnable,        // 1 runnable and on a run queue
+Grunning,         // 2 running
+Gsyscall,         // 3 performing a syscall
+Gwaiting,         // 4 waiting for the runtime
+Gmoribund_unused, // 5 currently unused, but hardcoded in gdb scripts
+Gdead,            // 6 goroutine is dead
+Genqueue,         // 7 only the Gscanenqueue is used
+Gcopystack,       // 8 in this state when newstack is moving the stack
+```
+
+* `GOMAXPROCS` 控制go协程可以在多少个core上运行。
+
+* Concurrency Pattern
+	
+	1. Generator
+
+```go
+    c := boring("boring!") // Function returning a channel.
+    for i := 0; i < 5; i++ {
+        fmt.Printf("You say: %q\n", <-c)
+    }
+    fmt.Println("You're boring; I'm leaving.")
+
+	func boring(msg string) <-chan string { // Returns receive-only channel of strings.
+		c := make(chan string)
+		go func() { // We launch the goroutine from inside the function.
+			for i := 0; ; i++ {
+				c <- fmt.Sprintf("%s %d", msg, i)
+				time.Sleep(time.Duration(rand.Intn(1e3)) * time.Millisecond)
+			}
+		}()
+		return c // Return the channel to the caller.
+	}
+```
+
+> 上面的代码存在协程泄漏，需要考虑加入context
+
+	2. Fan in
+
+```go
+func merge(cs ...<-chan int) <-chan int {
+    var wg sync.WaitGroup
+    out := make(chan int)
+
+    // Start an output goroutine for each input channel in cs.  output
+    // copies values from c to out until c is closed, then calls wg.Done.
+    output := func(c <-chan int) {
+        for n := range c {
+            out <- n
+        }
+        wg.Done()
+    }
+    wg.Add(len(cs))
+    for _, c := range cs {
+        go output(c)
+    }
+
+    // Start a goroutine to close out once all the output goroutines are
+    // done.  This must start after the wg.Add call.
+    go func() {
+        wg.Wait()
+        close(out)
+    }()
+    return out
+}
+```
+
+
+	3. Fan out
+
+```go
+func fanOutSem() {
+	emps := 2000
+	ch := make(chan string, emps)
+
+	g := runtime.GOMAXPROCS(0)
+	sem := make(chan bool, g)
+
+	for e := 0; e < emps; e++ {
+		go func(emp int) {
+			sem <- true
+			{
+				time.Sleep(time.Duration(rand.Intn(200)) * time.Millisecond)
+				ch <- "paper"
+				fmt.Println("employee : sent signal :", emp)
+			}
+			<-sem
+		}(e)
+	}
+
+	for emps > 0 {
+		p := <-ch
+		emps--
+		fmt.Println(p)
+		fmt.Println("manager : recv'd signal :", emps)
+	}
+
+	time.Sleep(time.Second)
+	fmt.Println("-------------------------------------------------------------")
+}
+
+```
+
+	4. Drop
+
+```go
+func drop() {
+	const cap = 100
+	ch := make(chan string, cap)
+
+	go func() {
+		for p := range ch {
+			fmt.Println("employee : recv'd signal :", p)
+		}
+	}()
+
+	const work = 2000
+	for w := 0; w < work; w++ {
+		select {
+		case ch <- "paper":
+			fmt.Println("manager : sent signal :", w)
+		default:
+			fmt.Println("manager : dropped data :", w)
+		}
+	}
+
+	close(ch)
+	fmt.Println("manager : sent shutdown signal")
+
+	time.Sleep(time.Second)
+	fmt.Println("-------------------------------------------------------------")
+}
+```
+
+	5. pooling
+
+```go
+func pooling() {
+	ch := make(chan string)
+
+	g := runtime.GOMAXPROCS(0)
+	for e := 0; e < g; e++ {
+		go func(emp int) {
+			for p := range ch {
+				fmt.Printf("employee %d : recv'd signal : %s\n", emp, p)
+			}
+			fmt.Printf("employee %d : recv'd shutdown signal\n", emp)
+		}(e)
+	}
+
+	const work = 100
+	for w := 0; w < work; w++ {
+		ch <- "paper"
+		fmt.Println("manager : sent signal :", w)
+	}
+
+	close(ch)
+	fmt.Println("manager : sent shutdown signal")
+
+	time.Sleep(time.Second)
+	fmt.Println("-------------------------------------------------------------")
+}
+```
+
+	5. Pipeline
+
+```go
+func gen(nums ...int) <-chan int {
+    out := make(chan int)
+    go func() {
+        for _, n := range nums {
+            out <- n
+        }
+        close(out)
+    }()
+    return out
+}
+
+func sq(in <-chan int) <-chan int {
+    out := make(chan int)
+    go func() {
+        for n := range in {
+            out <- n * n
+        }
+        close(out)
+    }()
+    return out
+}
+
+func main() {
+    // Set up the pipeline and consume the output.
+    for n := range sq(sq(gen(2, 3))) {
+        fmt.Println(n) // 16 then 81
+    }
+}
+
+```
+
+## Data Race
+
+* `go build -race/go test -race` 开启race检测
+* map默认自带race检测
+* 对于接口的read/write是存在data race的，因为interface是个双字大小的类型，赋值的时候不是原子的，需要修改指向的类型，还需要修改指向的值。
+
+
+## Channels
+
+channels允许goroutines通过信号语义相互通信，Channels通过使用发送/接收数据或通过识别各个Channels上的状态变化来完成此信号。
+不要以Channels是队列的思想来设计软件，而要专注于信号语义来简化同步。
+
+* 使用channels编排和协调goroutine
+	1. 关注channels提供的信令语义，而不是数据共享。
+	2. 信号分为有数据和无数据的。
+	3. 对于使用channels来作为数据共享的场景需要质疑
+
+* Unbuffered channels
+	1. 接收发生在发送之前
+	2. 100%保证信号到达
+	3. 对于何时收到信号是未知的，因为你发送的时候，接收端可能还没有在接收
+
+* Buffered channels
+	1. 发送发生在接收前
+	2. 减少了信号之间的阻塞延迟，多次信号发送之间是没有延迟的
+	3. 不保证信号被接收了，可能一直在队列中
+		* 缓冲区越大，保证越少
+		* 缓冲区为1的话，可以保证只有一个信号被延迟发送。
+
+* Closing channels
+	1. Close发生在接收前
+	2. 是一种没有数据的信号
+	3. 用于取消或者是deadline是最佳的
+
+* NIL channels
+	1. 发送和接收是阻塞的
+	2. 关闭了信号
+	3. 非常适合速率限制或短期停工
+
+* 往Closed的channel发送信号会导致panic，但是接收是可以的，会立即返回。
+
+* close channel或者是对struct{}类型的channel进行send属于无数据的信号，这类信号通常用于stop、cannecel等场景。也可以使用Context
+
+Channels内部是一个hchan结构，这个结构大致如下:
+
+```go
+type hchan struct {
+	buf  CircularQueue
+	sendx uint64
+	recvx uint64
+	lock mutex
+	sendq sudog
+	recvq sudog
+}
+
+type sudog struct {
+	G Coroutine
+	elem T
+	...
+}
+```
+
+一个circular queue，chan的读和写实际就是操作sendx、recvx、chan本身其实就是一个指向hchan的指针。当chan是buffer的channel的时候写入和读取就是简单的加锁然后移动sendx、recvx
+当chan为unbuffer或者buffer满的时候发生写入或者buffer空的时候发生读取的时候都会导致阻塞，这个时候go runtime会调用gopark把当前协程的状态设置为waitting，然后从当前协程中移除
+放入全局队列中。然后这个协程所对应的OS Thread会继续从可运行队列中运行下一个协程。然后把当前协程和要写入的值放入一个类为sudog的send queue中。当有receive从协程接收的时候会
+从send queue中出队，把值放到circular queue中或者如果是一个unbuffered的chan则直接赋值给receiver，最后调用go runtime中的goready将当前协程设置为runable。等待调度到OS Thread中
+被运行。同样当receive出现阻塞的时候，过程和send类似。
+
+## Context
+
+* Context提供了key-value的映射，key和value都是`interface{}`类型，key必须具备相等性比较，而value则允许被多个协程安全的使用。 
+* 到server的请求应该创建一个Context
+* 从Server中发出的请求应该可以接收Context参数
+* 进来的请求和出去的请求之间必须能否传递Context
+* 取消Context后，从该Context派生的所有Context也会被取消
+* 不要将上下文存储在结构类型中；而是将上下文明确传递给需要它的每个函数
+* 即使函数允许，也不要传递nil Context。如果不确定使用哪个上下文，请传递context.TODO。
+* 仅将上下文值用于请求范围的进程和API间的传递，而不用于将可选参数传递给函数。
+* 可以将相同的上下文传递给在不同goroutine中运行的函数。上下文对于由多个goroutine同时使用是安全的。
+
+## Testing
+
+* 使用httptest来做mockClient
+
+```go
+func init() {
+	handlers.Routes()
+}
+
+// TestSendJSON testing the sendjson internal endpoint.
+func TestSendJSON(t *testing.T) {
+	url := "/sendjson"
+	statusCode := 200
+
+	t.Log("Given the need to test the SendJSON endpoint.")
+	{
+		r := httptest.NewRequest("GET", url, nil)
+		w := httptest.NewRecorder()
+		http.DefaultServeMux.ServeHTTP(w, r)
+
+		testID := 0
+		t.Logf("\tTest %d:\tWhen checking %q for status code %d", testID, url, statusCode)
+		{
+			if w.Code != 200 {
+				t.Fatalf("\t%s\tTest %d:\tShould receive a status code of %d for the response. Received[%d].", failed, testID, statusCode, w.Code)
+			}
+			t.Logf("\t%s\tTest %d:\tShould receive a status code of %d for the response.", succeed, testID, statusCode)
+
+			var u struct {
+				Name  string
+				Email string
+			}
+
+			if err := json.NewDecoder(w.Body).Decode(&u); err != nil {
+				t.Fatalf("\t%s\tTest %d:\tShould be able to decode the response.", failed, testID)
+			}
+			t.Logf("\t%s\tTest %d:\tShould be able to decode the response.", succeed, testID)
+
+			if u.Name == "Bill" {
+				t.Logf("\t%s\tTest %d:\tShould have \"Bill\" for Name in the response.", succeed, testID)
+			} else {
+				t.Errorf("\t%s\tTest %d:\tShould have \"Bill\" for Name in the response : %q", failed, testID, u.Name)
+			}
+
+			if u.Email == "bill@ardanlabs.com" {
+				t.Logf("\t%s\tTest %d:\tShould have \"bill@ardanlabs.com\" for Email in the response.", succeed, testID)
+			} else {
+				t.Errorf("\t%s\tTest %d:\tShould have \"bill@ardanlabs.com\" for Email in the response : %q", failed, testID, u.Email)
+			}
+		}
+	}
+}
+
+```
+
+
+* 使用httptest来做mockServer
+
+```go
+// mockServer returns a pointer to a server to handle the mock get call.
+func mockServer() *httptest.Server {
+	f := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintln(w, feed)
+	}
+
+	return httptest.NewServer(http.HandlerFunc(f))
+}
+
+// TestDownload validates the http Get function can download content and
+// the content can be unmarshaled and clean.
+func TestDownload(t *testing.T) {
+	statusCode := http.StatusOK
+
+	server := mockServer()
+	defer server.Close()
+
+	t.Log("Given the need to test downloading content.")
+	{
+		testID := 0
+		t.Logf("\tTest %d:\tWhen checking %q for status code %d", testID, server.URL, statusCode)
+		{
+			resp, err := http.Get(server.URL)
+			if err != nil {
+				t.Fatalf("\t%s\tTest %d:\tShould be able to make the Get call : %v", failed, testID, err)
+			}
+			t.Logf("\t%s\tTest %d:\tShould be able to make the Get call.", succeed, testID)
+
+			defer resp.Body.Close()
+
+			if resp.StatusCode != statusCode {
+				t.Fatalf("\t%s\tTest %d:\tShould receive a %d status code : %v", failed, testID, statusCode, resp.StatusCode)
+			}
+			t.Logf("\t%s\tTest %d:\tShould receive a %d status code.", succeed, testID, statusCode)
+
+			var d Document
+			if err := xml.NewDecoder(resp.Body).Decode(&d); err != nil {
+				t.Fatalf("\t%s\tTest %d:\tShould be able to unmarshal the response : %v", failed, testID, err)
+			}
+			t.Logf("\t%s\tTest %d:\tShould be able to unmarshal the response.", succeed, testID)
+
+			if len(d.Channel.Items) == 1 {
+				t.Logf("\t%s\tTest %d:\tShould have 1 item in the feed.", succeed, testID)
+			} else {
+				t.Errorf("\t%s\tTest %d:\tShould have 1 item in the feed : %d", failed, testID, len(d.Channel.Items))
+			}
+		}
+	}
+}
+
+```
+
+## Compile args
+
+```go
+panic: Aw, snap
+ goroutine 1 [running]:
+ main.main()
+         /home/johnpili/go/src/company.com/event-document-pusher/main.go:42 +0x3e
+
+> go build -trimpath
+
+panic: Aw, snap
+ goroutine 1 [running]:
+ main.main()
+         src/company.com/event-document-pusher/main.go:42 +0x3e
+```
 
 ## Reference
 
@@ -1924,3 +2550,8 @@ log和error是需要一起处理的，error的地方都是需要记录日志的�
 * [How Stacks are Handled in Go](https://blog.cloudflare.com/how-stacks-are-handled-in-go/)
 * [gc](https://github.com/qcrao/Go-Questions/blob/master/GC/GC.md)
 * [Go Escape Analysis Flaws](https://docs.google.com/document/d/1CxgUBPlx9iJzkz9JWkb6tIpTe5q32QDmz8l0BouG0Cw/edit)
+
+## Reading TODO
+* https://brunocalza.me/how-buffer-pool-works-an-implementation-in-go/
+* https://www.youtube.com/watch?v=f6kdp27TYZs
+* https://talks.golang.org/2013/advconc.slide#1

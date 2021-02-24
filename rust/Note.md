@@ -132,5 +132,4 @@ fn parse_line(s: &str) -> anyhow::Result<(PasswordPolicy, &str)> {
 
 * `thiserror`
 
-
 * `anyhow`
