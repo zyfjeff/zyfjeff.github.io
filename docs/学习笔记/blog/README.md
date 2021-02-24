@@ -1,5 +1,5 @@
 
-## Can Reordering of Release/Acquire Operations Introduce Deadlock?
+# Can Reordering of Release/Acquire Operations Introduce Deadlock?
 
 
 * `read-acquire`
@@ -110,6 +110,7 @@ while (!B.compare_exchange_weak(expected, 1, std::memory_order_acquire)) {
 因此对于上述的这种情况是不会发生死锁的，借助于[Matt Godbolt’s Compiler Explorer](https://godbolt.org/g/DW6fuV)可以验证上述代码在不同编译器
 的优化编译场景下是否发生了重排序。事实上主流的C++编译器都没有发生重排序。
 
-* https://preshing.com/20170612/can-reordering-of-release-acquire-operations-introduce-deadlock/
+
+[Can Reordering of Release/Acquire Operations Introduce Deadlock?](https://preshing.com/20170612/can-reordering-of-release-acquire-operations-introduce-deadlock/)
 
 

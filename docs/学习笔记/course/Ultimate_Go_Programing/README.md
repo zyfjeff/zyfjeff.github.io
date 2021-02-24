@@ -1,52 +1,68 @@
+---
+hide:
+  - toc        # Hide table of contents
+---
+
+# Ultimate Go Programing
 ## Lesson 1: Design Guidelines
 
 ### Philosophy
 
 1. Open Your Mind:
 
-* Technology changes quickly but people's minds change slowly.
-* Easy to adopt new technology but hard to adopt new ways of thinking.
+	* Technology changes quickly but people's minds change slowly.
+	* Easy to adopt new technology but hard to adopt new ways of thinking.
 
 2. Interesting Questions - What do they mean to you?
 
-* Is it a good program?
-* Is it an efficient program?
-* Is it correct?
-* Was it done on time?
-* What did it cost?
+	* Is it a good program?
+	* Is it an efficient program?
+	* Is it correct?
+	* Was it done on time?
+	* What did it cost?
 
 3. Aspire To
 
-* Be a champion for quality, efficiency and simplicity.
-* Have a point of view.
-* Value introspection and self-review.
+	* Be a champion for quality, efficiency and simplicity.
+	* Have a point of view.
+	* Value introspection and self-review.
 
 4. Reading Code
 
-> “If most computer people lack understanding and knowledge, then what they will select will also be lacking.” - Alan Kay
-> "The software business is one of the few places we teach people to write before we teach them to read." - Tom Love (inventor of Objective C)
-> "Code is read many more times than it is written." - Dave Cheney
-> "Programming is, among other things, a kind of writing. One way to learn writing is to write, but in all other forms of writing, one also reads. 
-We read examples both good and bad to facilitate learning. But how many programmers learn to write programs by reading programs?" - Gerald M. Weinberg
-> "Skill develops when we produce, not consume." - Katrina Owen
-
+	!!! tip
+		“If most computer people lack understanding and knowledge, then what they will select will also be lacking.” - Alan Kay
+		
+		"The software business is one of the few places we teach people to write before we teach them to read." - Tom Love (inventor of Objective C)
+		
+		"Code is read many more times than it is written." - Dave Cheney
+		
+		"Programming is, among other things, a kind of writing. One way to learn writing is to write, but in all other forms of writing, one also reads. 
+		
+		We read examples both good and bad to facilitate learning. But how many programmers learn to write programs by reading programs?" - Gerald M. Weinberg
+		
+		"Skill develops when we produce, not consume." - Katrina Owen
 
 5. Productivity vs Performance
 
-遵循Go的idioms和guideliness，我们将会同时拥有性能和开发效率，在过于这是需要二选一的，而大家更多是选择了开发效率，并希望通过硬件的发展来提高性能。这也导致了为此设计的语言产生了大量低效的软件。
+	遵循Go的idioms和guideliness，我们将会同时拥有性能和开发效率，在过于这是需要二选一的，而大家更多是选择了开发效率，并希望通过硬件的发展来提高性能。这也导致了为此设计的语言产生了大量低效的软件。
 
 6. Correctness vs Performance
 
-您想要编写针对正确性进行了优化的代码。不要根据您认为可能会更好的性能来做出编码决策。您必须进行基准测试以了解代码是否不够快以此来决定是否需要优化。
-
-> "Make it correct, make it clear, make it concise, make it fast. In that order." - Wes Dyer
-> "Good engineering is less about finding the "perfect" solution and more about understanding the tradeoffs and being able to explain them." - JBD
-> "The correctness of the implementation is the most important concern, but there is no royal road to correctness. It involves diverse tasks such as thinking of invariants, testing and code reviews. Optimization should be done, but not prematurely." - Al Aho (inventor of AWK)
-> "The basic ideas of good style, which are fundamental to write clearly and simply, are just as important now as they were 35 years ago. Simple, straightforward code is just plain easier to work with and less likely to have problems. As programs get bigger and more complicated, it's even more important to have clean, simple code." - Brian Kernighan
-> "Problems can usually be solved with simple, mundane solutions. That means there's no glamorous work. You don't get to show off your amazing skills. You just build something that gets the job done and then move on. This approach may not earn you oohs and aahs, but it lets you get on with it." - Jason Fried
+	您想要编写针对正确性进行了优化的代码。不要根据您认为可能会更好的性能来做出编码决策。您必须进行基准测试以了解代码是否不够快以此来决定是否需要优化。
+	!!! tip
+		"Make it correct, make it clear, make it concise, make it fast. In that order." - Wes Dyer
+		
+		"Good engineering is less about finding the "perfect" solution and more about understanding the tradeoffs and being able to explain them." - JBD
+		
+		"The correctness of the implementation is the most important concern, but there is no royal road to correctness. It involves diverse tasks such as thinking of invariants, testing and code reviews. Optimization should be done, but not prematurely." - Al Aho (inventor of AWK)
+		
+		"The basic ideas of good style, which are fundamental to write clearly and simply, are just as important now as they were 35 years ago. Simple, straightforward code is just plain easier to work with and less likely to have problems. As programs get bigger and more complicated, it's even more important to have clean, simple code." - Brian Kernighan
+		
+		"Problems can usually be solved with simple, mundane solutions. That means there's no glamorous work. You don't get to show off your amazing skills. You just build something that gets the job done and then move on. This approach may not earn you oohs and aahs, but it lets you get on with it." - Jason Fried
 
 7. Code Reviews
-没有设计哲学，您就无法看一段代码，函数或算法，并确定它是好是坏。这四个主要类别是代码审查的基础，应按此顺序排列优先级：完整性，可读性，简单性和性能。您必须有意识地并且有充分的理由能够解释您选择的类别。
+
+	没有设计哲学，您就无法看一段代码，函数或算法，并确定它是好是坏。这四个主要类别是代码审查的基础，应按此顺序排列优先级：完整性，可读性，简单性和性能。您必须有意识地并且有充分的理由能够解释您选择的类别。
 
 * Integrity
 We need to become very serious about reliability.

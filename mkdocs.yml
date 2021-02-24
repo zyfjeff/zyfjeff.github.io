@@ -8,6 +8,15 @@ theme:
 
 markdown_extensions:
   - meta
+  - attr_list
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -19,3 +28,8 @@ repo_url: https://github.com/zyfjeff/zyfjeff.github.io
 repo_name: zyfjeff/zyfjeff.github.io
 edit_uri: edit/master/docs/
 site_url: https://zyfjeff.github.io
+extra_javascript:
+  - https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js
+  - javascripts/config.js
+extra_css:
+  - https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/default.min.css
