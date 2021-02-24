@@ -1,8 +1,3 @@
----
-hide:
-  - navigation # Hide navigation
----
-
 # 负载均衡算法
 
 [Load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing))根据Wiki的定义，负载均衡指的是在一组资源（计算单元）上分配一组任务的过程，目的是使它们的整体处理效率更高。

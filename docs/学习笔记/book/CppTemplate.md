@@ -1,5 +1,4 @@
-# C++ Templates 读书笔记
-
+# C++ Templates
 
 * `auto`类型推导会忽略掉引用和CV限制符(`const`、`voliate`等)
 

@@ -1,4 +1,6 @@
 
+# Concurrency Modern C++
+
 ## what is a memory model?
 
 > The C++ memory model defines a contract, this contract is between the programmer and the system
