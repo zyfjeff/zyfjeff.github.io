@@ -1,6 +1,9 @@
+---
+hide:
+  - navigation # Hide navigation
+---
 
-
-# Tips
+# GDB Tips
 
 ## Enable pretty print
 
