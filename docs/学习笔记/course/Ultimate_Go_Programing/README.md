@@ -64,50 +64,61 @@ hide:
 
 	没有设计哲学，您就无法看一段代码，函数或算法，并确定它是好是坏。这四个主要类别是代码审查的基础，应按此顺序排列优先级：完整性，可读性，简单性和性能。您必须有意识地并且有充分的理由能够解释您选择的类别。
 
+
+### Code Reviews
+
 * Integrity
-We need to become very serious about reliability.
+
+	**We need to become very serious about reliability.**
 
     1. Integrity is about every allocation, read and write of memory being accurate, consistent and efficient. The type system is critical to making sure we have this micro level of integrity.
+
     2. Integrity is about every data transformation being accurate, consistent and efficient. Writing less code and error handling is critical to making sure we have this macro level of integrity.
 
-Write Less Code
-Error Handling
+	**Write Less Code**
+
+	!!! tips
+		There have been studies that have researched the number of bugs you can expect to have in your software. The industry average is around 15 to 50 bugs per 1000 lines of code. One simple way to reduce the number of bugs, and increase the integrity of your software, is to write less code.
+
+	**Error Handling**
+
+	!!! tips
+		When error handling is treated as an exception and not part of the main code, you can expect the majority of your critical failures to be due to error handling.
 
 * Readability
 
-我们必须构造我们的系统以使其更易于理解
+	代码要易于阅读和理解，而无需花费精力。同样重要的是，它不隐藏每行代码，功能，程序包及其运行的整体生态系统的成本/影响。
 
-这是关于编写简单的代码，这些代码易于阅读和理解，而无需花费精力。同样重要的是，它不隐藏每行代码，功能，程序包及其运行的整体生态系统的成本/影响。
-
-Code Must Never Lie
+	**Code Must Never Lie**
 
 * Simplicity
-我们必须了解，简单性很难设计，而且构建起来很复杂。
+	
+	我们必须了解，简单性很难设计，而且构建起来很复杂。我们必须将许多维护和设计变得简单，因为这可能导致更多的问题。它可能会引起可读性问题，并可能导致性能问题。
 
-这是关于隐藏复杂性。必须将许多维护和设计变得简单，因为这可能导致更多的问题。它可能会引起可读性问题，并可能导致性能问题。
+	!!! tips
+		"Simplicity is a great virtue but it requires hard work to achieve it and education to appreciate it. And to make matters worse: complexity sells better." - Edsger W. Dijkstra
+		"Everything should be made as simple as possible, but not simpler." - Albert Einstein
+		"You wake up and say, I will be productive, not simple, today." - Dave Cheney
 
+	
+	封装是我们40年来一直试图解决的问题。 Go对该软件包采取了一种新的方法。提升封装水平，并在语言级别提供更丰富的支持。
 
-> "Simplicity is a great virtue but it requires hard work to achieve it and education to appreciate it. And to make matters worse: complexity sells better." - Edsger W. Dijkstra
-> "Everything should be made as simple as possible, but not simpler." - Albert Einstein
-> "You wake up and say, I will be productive, not simple, today." - Dave Cheney
-
-封装是我们40年来一直试图解决的问题。 Go对该软件包采取了一种新的方法。提升封装水平，并在语言级别提供更丰富的支持。
-
-> "The purpose of abstraction is not to be vague, but to create a new semantic level in which one can be absolutely precise - Edsger W. Dijkstra
+	!!! tips
+		"The purpose of abstraction is not to be vague, but to create a new semantic level in which one can be absolutely precise - Edsger W. Dijkstra
 
 * Performance
-我们必须减少计算以获得所需的结果。
+	
+	我们必须减少计算以获得所需的结果。
 
-Rules of Performance:
-
-    * Never guess about performance.
-    * Measurements must be relevant.
-    * Profile before you decide something is performance critical.
-    * Test to know you are correct.
+	Rules of Performance:
+	* Never guess about performance.
+	* Measurements must be relevant.
+	* Profile before you decide something is performance critical.
+	* Test to know you are correct.
 
 * Micro-Optimizations
 
-微观优化是要尽可能地压缩每个代码快性能。当以此优先级编写代码时，很难编写可读，简单或惯用的代码。您正在编写巧妙的代码，这些代码可能需要`unsafe`的软件包，或者可能需要放入汇编中。
+	微观优化是要尽可能地压缩每个代码快性能。当以此优先级编写代码时，很难编写可读，简单或惯用的代码。您正在编写巧妙的代码，这些代码可能需要`unsafe`的软件包，或者可能需要放入汇编中。
 
 
 ## Lesson2: Language Syntax
@@ -115,47 +126,48 @@ Rules of Performance:
 ### Variable
 
 * When variables are being declared to their zero value, use the keyword var.
+
 * When variables are being declared and initialized, use the short variable declaration operator.
 
 * 小心`:=`赋值
 
-```go
-package main
+	```go
+	package main
 
-import (
-	"fmt"
-	"os"
-)
+	import (
+		"fmt"
+		"os"
+	)
 
-func main() {
-	var data []string
+	func main() {
+		var data []string
 
-	killswitch := os.Getenv("KILLSWITCH")
+		killswitch := os.Getenv("KILLSWITCH")
 
-	if killswitch == "" {
-		fmt.Println("kill switch is off")
-		// data被当作全新的变量，覆盖了上面的data
-		data, err := getData()
+		if killswitch == "" {
+			fmt.Println("kill switch is off")
+			// data被当作全新的变量，覆盖了上面的data
+			data, err := getData()
 
-		if err != nil {
-			panic("ERROR!")
+			if err != nil {
+				panic("ERROR!")
+			}
+
+			fmt.Printf("Data was fetched! %d\n", len(data))
 		}
 
-		fmt.Printf("Data was fetched! %d\n", len(data))
+		for _, item := range data {
+			fmt.Println(item)
+		}
 	}
 
-	for _, item := range data {
-		fmt.Println(item)
+	func getData() ([]string, error) {
+		// Simulating getting the data from a datasource - lets say a DB.
+		return []string{"there","are","no","strings","on","me"}, nil
 	}
-}
+	```
 
-func getData() ([]string, error) {
-	// Simulating getting the data from a datasource - lets say a DB.
-	return []string{"there","are","no","strings","on","me"}, nil
-}
-```
-
-#### Reference
+### Reference
 
 [What's in a name?](https://talks.golang.org/2014/names.slide#1)
 
@@ -163,78 +175,87 @@ func getData() ([]string, error) {
 
 * Memory alignment
 
-> All memory is allocated on an alignment boundary to minimize memory defragmentation. To determine the alignment boundary Go is using for your architecture, you can run the unsafe.Alignof function. The alignment boundary in Go for the 64bit Darwin platform is 8 bytes. So when Go determines the memory allocation for our structs, it will pad bytes to make sure the final memory footprint is a multiple of 8. The compiler will determine where to add the padding.
+	!!! tips
+		All memory is allocated on an alignment boundary to minimize memory defragmentation. To determine the alignment boundary Go is using for your architecture, you can run the unsafe.Alignof function. The alignment boundary in Go for the 64bit Darwin platform is 8 bytes. So when Go determines the memory allocation for our structs, it will pad bytes to make sure the final memory footprint is a multiple of 8. The compiler will determine where to add the padding.
 
-> 为什么要填充1个字节呢？,这个目的是为了让整体的大小是字的倍数，字长一本都是2、4、8、16这样的2的幂次方，对于64位的CPU来说，这里只需要填充1个字节就可以满足这个要求。
+		为什么要填充1个字节呢？,这个目的是为了让整体的大小是字的倍数，字长一般都是2、4、8、16这样的2的幂次方，对于64位的CPU来说，这里只需要填充1个字节就可以满足这个要求。
 
-CPU每次读取内存都是按照一个字来读取，不同的CPU架构所代表的大小不同，对于64位的CPU来说，一个字就是8个字节，CPU每次读和写都只能操作一个字的内存，因此为了高效的读取变量，我们应该让变量
-占用的内存控制在一个字内，而不是跨两个字，这样会导致CPU多读取一次。为此我们需要对内存进行padding，以保证变量不会跨多个字存放。比如下面这个结构体。
 
-```go
-type Example struct{
-    BoolValue bool
-    IntValue  int16
-    FloatValue float32
-}
-```
+	CPU每次读取内存都是按照一个字来读取，不同的CPU架构所代表的大小不同，对于64位的CPU来说，一个字就是8个字节，CPU每次读和写都只能操作一个字的内存，因此为了高效的读取变量，我们应该让变量
+	占用的内存控制在一个字内，而不是跨两个字，这样会导致CPU多读取一次。为此我们需要对内存进行padding，以保证变量不会跨多个字存放。比如下面这个结构体。
 
-上面的`struct`最终会padding一个字节，总占用为8个字节，通过代码[paddding.go](Lesson2/alignment.go)可以看出，`BoolValue`的地方填充了一个字节。
+	```go
+	type Example struct{
+		BoolValue bool
+		IntValue  int16
+		FloatValue float32
+	}
+	```
 
-> 为什么是在`BoolValue`处填充一个字节呢?，而不是在`IntValue`的旁边填充？ 或者是在`FloatValue`的旁边填充呢? 
-> 可以试着枚举一下，如果是在`IntValue`处填充1个字节，那么如果字长是2字节，那么`IntValue`就会跨多个字存放(一半在前一个字，一半在后一个字)，为了解决这个问题，只能是在`BoolValue`处填充。
-> 大家可以试着枚举下，假设位长位2、4、8的时候，在哪里填充可以避免跨多个字存放，最后的结论就是在`BoolValue`处存放最佳。
+	上面的`struct`最终会padding一个字节，总占用为8个字节，通过这段代码[alignment](Lesson2/alignment.go)可以看出，`BoolValue`的地方填充了一个字节。
+
+	!!! tips
+
+		为什么是在`BoolValue`处填充一个字节呢?，而不是在`IntValue`的旁边填充？ 或者是在`FloatValue`的旁边填充呢? 
+		可以试着枚举一下，如果是在`IntValue`处填充1个字节，那么如果字长是2字节，那么`IntValue`就会跨多个字存放(一半在前一个字，一半在后一个字)，为了解决这个问题，只能是在`BoolValue`处填充。
+		大家可以试着枚举下，假设位长位2、4、8的时候，在哪里填充可以避免跨多个字存放，最后的结论就是在`BoolValue`处存放最佳。
 
 
 * Anonymous struct
 
-Go中是不允许隐式类型转换的，两个不同的struct即使是具有完全相同的字段和顺序，也不能进行隐式转换。但是通过匿名struct就可以做了。具体代码见[anonymous_struct.go](Lesson2/anonymous_struct.go)
+	Go中是不允许隐式类型转换的，两个不同的struct即使是具有完全相同的字段和顺序，也不能进行隐式转换。但是通过匿名struct就可以做了。具体代码见[anonymous_struct.go](Lesson2/anonymous_struct.go)
 
-> "Implicit conversion of types is the Halloween special of coding. Whoever thought of them deserves their own special hell." - Martin Thompson
-> 我们应该尽可能去避免使用隐式转换。
+	!!! tips
+		"Implicit conversion of types is the Halloween special of coding. Whoever thought of them deserves their own special hell." - Martin Thompson
+		
+		我们应该尽可能去避免使用隐式转换。
 
 
 * Embedded Types
-结构体类型可以包含匿名或嵌入式字段。这也称为嵌入类型，当我们将一个类型嵌入到结构中时，该类型的名称将充当随后嵌入字段的字段名称。
+	
+	结构体类型可以包含匿名或嵌入式字段。这也称为嵌入类型，当我们将一个类型嵌入到结构中时，该类型的名称将充当随后嵌入字段的字段名称。
 
-```go
-type Admin struct {
-    User
-    Level string
-}
-```
+	```go
+	type Admin struct {
+		User
+		Level string
+	}
+	```
 
-这并非继承，而是一种组合模式，接着我们来看看如何创建带有嵌入式字段的`struct`
+	这并非继承，而是一种组合模式，接着我们来看看如何创建带有嵌入式字段的`struct`
 
-```go
-func main() {
-    admin := &Admin{
-		// 和创建普通的struct一样，使用类型名作为字段名
-        User: User{
-            Name:  "john smith",
-            Email: "john@email.com",
-        },
-        Level: "super",
-    }
+	```go
+	func main() {
+		admin := &Admin{
+			// 和创建普通的struct一样，使用类型名作为字段名
+			User: User{
+				Name:  "john smith",
+				Email: "john@email.com",
+			},
+			Level: "super",
+		}
 
-    SendNotification(admin)
-}
+		SendNotification(admin)
+	}
 
-// Output
-User: Sending User Email To john smith<john@email.com>
-```
+	// Output
+	User: Sending User Email To john smith<john@email.com>
+	```
 
-通过这种方式的组合，使得Admin实现User所有的接口。
+	通过这种方式的组合，使得Admin实现User所有的接口。
 
 * Reference
-[Understanding Type in Go](https://www.ardanlabs.com/blog/2013/07/understanding-type-in-go.html)
-[Object Oriented Programming in Go](https://www.ardanlabs.com/blog/2013/07/object-oriented-programming-in-go.html)
-[Padding is hard](https://dave.cheney.net/2015/10/09/padding-is-hard)
+
+	* [Understanding Type in Go](https://www.ardanlabs.com/blog/2013/07/understanding-type-in-go.html)
+
+	* [Object Oriented Programming in Go](https://www.ardanlabs.com/blog/2013/07/object-oriented-programming-in-go.html)
+
+	* [Padding is hard](https://dave.cheney.net/2015/10/09/padding-is-hard)
 
 
 ### Pointer
 
 指针语义和值语义，前者是共享的，存在副作用，涉及到data race、逃逸分析等，而后者无副作用，但是存在拷贝开销。
-
 在Go中是goroutine中是没办法指向另外一个goroutine的栈的，这是因为goroutine的栈是会增长的，如果发生增长会导致栈被拷贝到另外一个更大的栈空间上，这就导致了指针失效了。下面这段代码演示了栈增长的情况。
 
 ```go
@@ -264,191 +285,185 @@ func stackCopy(s *string, c int, a [size]int) {
 }
 ```
 
-> 与 GCC 相似，在 Golang 的 goroutine 的实现中也应用了类似的技术。在 1.3 版本及以前采用的是分段栈的实现，在初始时会对每个 goroutine 分配 8KB 的内存，而在 goroutine 内部每个函数的调用时，会检查栈空间是否足够使用，
-> 若不够则调用 morestack 进行额外的栈空间申请，申请完毕后连接到旧栈空间上，在函数结束时会调用 lessstack 来回收多余的栈空间。由于栈的缩减是一个相对来说开销较大的逻辑，尤其在一个较深的递归中，会有较多的 morestack 和 lessstack 调用，
-> 这种问题被成为热分裂问题。Golang 1.4 通过栈复制法来解决这个问题，在栈空间不足时，不会申请一个新的栈空间块链接到老的栈空间快上，而是创建一个原来两倍大小的栈空间块，并将旧栈信息拷贝至新栈中。这样对于栈的缩减，没有多余的开销，
-> 同时在第二次拓展栈时，也无需再次申请空间。针对栈复制中指针的问题，由于垃圾回收机制的存在，可以找到哪部分的栈使用了指针，通过对应可以将指针地址进行相应的更新。
+!!! tip
+	与 GCC 相似，在 Golang 的 goroutine 的实现中也应用了类似的技术。在 1.3 版本及以前采用的是分段栈的实现，在初始时会对每个 goroutine 分配 8KB 的内存，而在 goroutine 内部每个函数的调用时，会检查栈空间是否足够使用，若不够则调用 morestack 进行额外的栈空间申请，申请完毕后连接到旧栈空间上，在函数结束时会调用 lessstack 来回收多余的栈空间。由于栈的缩减是一个相对来说开销较大的逻辑，尤其在一个较深的递归中，会有较多的 morestack 和 lessstack 调用，这种问题被成为热分裂问题。Golang 1.4 通过栈复制法来解决这个问题，在栈空间不足时，不会申请一个新的栈空间块链接到老的栈空间快上，而是创建一个原来两倍大小的栈空间块，并将旧栈信息拷贝至新栈中。这样对于栈的缩减，没有多余的开销，同时在第二次拓展栈时，也无需再次申请空间。针对栈复制中指针的问题，由于垃圾回收机制的存在，可以找到哪部分的栈使用了指针，通过对应可以将指针地址进行相应的更新。
 
 
 * 逃逸分析
 
-1. 当函数中返回的值被函数外所引用的时候，会导致这个值进行了逃逸，分配在堆上，例如下面这个例子
+	1. 当函数中返回的值被函数外所引用的时候，会导致这个值进行了逃逸，分配在堆上，例如下面这个例子
 
-```go
-package main
+		```go
+		package main
 
-type user struct {
-	name  string
-	email string
-}
-
-func main() {
-	u1 := createUser()
-
-	println("u1", &u1)
-}
-
-// 这里返回的指针指向栈上分配的user，这会导致逃逸分析生效
-// 将user分配在堆上，避免因为函数结束栈被清理导致指针失效。
-// 避免内联，否则就没有逃逸分析了
-//go:noinline
-func createUser() *user {
-	u := user{
-		name:  "Bill",
-		email: "bill@ardanlabs.com",
-	}
-
-	println("U", &u)
-	return &u
-}
-```
-
-逃逸分析的结果如下[escape1.go](Lesson2/escape/escape1.go):
-
-```bash
-./escape.go:17:6: cannot inline createUserV1: marked go:noinline
-./escape.go:31:6: cannot inline createUserV2: marked go:noinline
-./escape.go:8:6: cannot inline main: function too complex: cost 133 exceeds budget 80
-./escape.go:32:2: u escapes to heap:
-./escape.go:32:2:   flow: ~r0 = &u:
-./escape.go:32:2:     from &u (address-of) at ./escape.go:38:9
-./escape.go:32:2:     from return &u (return) at ./escape.go:38:2
-./escape.go:32:2: moved to heap: u
-```
-
-2. 当编译器发现一个值的大小无法在栈上存放的时候会将其分配在堆上
-
-
-3. 当编译器无法在编译时知道值的大小时就选择在堆上进行分配
-
-```go
-package main
-
-import (
-	"bytes"
-)
-
-func main() {
-    size := 10
-    // size的值是编译时无法知道的，如果这里改成10，就不会有逃逸分析了
-	b := make([]byte, size)
-	c := bytes.NewBuffer(b)
-	c.WriteString("test")
-}
-```
-
-逃逸分析的结果如下[escape2.go](Lesson2/escape/escape2.go):
-
-```bash
-./escape2.go:7:6: cannot inline main: function too complex: cost 84 exceeds budget 80
-./escape2.go:10:22: inlining call to bytes.NewBuffer func([]byte) *bytes.Buffer { return &bytes.Buffer literal }
-./escape2.go:9:11: make([]byte, size) escapes to heap:
-./escape2.go:9:11:   flow: {heap} = &{storage for make([]byte, size)}:
-./escape2.go:9:11:     from make([]byte, size) (non-constant size) at ./escape2.go:9:11
-./escape2.go:9:11: make([]byte, size) escapes to heap
-./escape2.go:10:22: &bytes.Buffer literal does not escape
-```
-
-4. 当变量赋值给interface或者函数的时候会导致逃逸
-
-```go
-package main
-
-import (
-	"bytes"
-)
-
-//go:noinline
-func InterfaceMethod(value interface{}) {
-}
-
-func main() {
-	size := 10
-	b := make([]byte, size)
-	c := bytes.NewBuffer(b)
-	c.WriteString("test")
-	// 导致逃逸分析
-	InterfaceMethod(c)
-}
-
-```
-
-逃逸分析的结果如下[escape3.go](Lesson2/escape/escape3.go):
-
-```bash
-./escape3.go:8:6: cannot inline InterfaceMethod: marked go:noinline
-./escape3.go:11:6: cannot inline main: function too complex: cost 145 exceeds budget 80
-./escape3.go:14:22: inlining call to bytes.NewBuffer func([]byte) *bytes.Buffer { return &bytes.Buffer literal }
-./escape3.go:8:22: value does not escape
-./escape3.go:13:11: make([]byte, size) escapes to heap:
-./escape3.go:13:11:   flow: {heap} = &{storage for make([]byte, size)}:
-./escape3.go:13:11:     from make([]byte, size) (non-constant size) at ./escape3.go:13:11
-./escape3.go:13:11: make([]byte, size) escapes to heap
-./escape3.go:14:22: &bytes.Buffer literal does not escape
-```
-
-5. 赋值给指针导致的逃逸
-
-```go
-func BenchmarkAssignmentIndirect(b *testing.B) {
-	type X struct {
-		p *int
-	}
-	for i := 0; i < b.N; i++ {
-		var i1 int
-		x1 := &X{
-			p: &i1, // GOOD: i1 does not escape
+		type user struct {
+			name  string
+			email string
 		}
-		_ = x1
 
-		var i2 int
-		x2 := &X{}
-		x2.p = &i2 // BAD: Cause of i2 escape
-	}
-}
-```
+		func main() {
+			u1 := createUser()
 
-逃逸分析的结果如下[example1_test.go](Lesson2/escape/flaws/example1/example1_test.go)
+			println("u1", &u1)
+		}
 
-```bash
-./example1_test.go:5:6: cannot inline BenchmarkAssignmentIndirect: unhandled op DCLTYPE
-./example1_test.go:16:7: i2 escapes to heap:
-./example1_test.go:16:7:   flow: {heap} = &i2:
-./example1_test.go:16:7:     from &i2 (address-of) at ./example1_test.go:18:10
-./example1_test.go:16:7:     from x2.p = &i2 (assign) at ./example1_test.go:18:8
-./example1_test.go:5:34: b does not escape
-./example1_test.go:16:7: moved to heap: i2
-./example1_test.go:11:9: &X literal does not escape
-./example1_test.go:17:9: &X literal does not escape
-```
+		// 这里返回的指针指向栈上分配的user，这会导致逃逸分析生效
+		// 将user分配在堆上，避免因为函数结束栈被清理导致指针失效。
+		// 避免内联，否则就没有逃逸分析了
+		//go:noinline
+		func createUser() *user {
+			u := user{
+				name:  "Bill",
+				email: "bill@ardanlabs.com",
+			}
 
-如果是赋值给指针的指针也是会导致逃逸的。
+			println("U", &u)
+			return &u
+		}
+		```
 
-```go
-package main
+		逃逸分析的结果如下[escape1.go](Lesson2/escape/escape1.go):
 
-func main() {
-	i := 0
-	pp := new(*int)
-	*pp = &i // BAD: i escapes
-	_ = pp
-}
-```
+		```bash
+		./escape.go:17:6: cannot inline createUserV1: marked go:noinline
+		./escape.go:31:6: cannot inline createUserV2: marked go:noinline
+		./escape.go:8:6: cannot inline main: function too complex: cost 133 exceeds budget 80
+		./escape.go:32:2: u escapes to heap:
+		./escape.go:32:2:   flow: ~r0 = &u:
+		./escape.go:32:2:     from &u (address-of) at ./escape.go:38:9
+		./escape.go:32:2:     from return &u (return) at ./escape.go:38:2
+		./escape.go:32:2: moved to heap: u
+		```
 
-逃逸分析的结果如下[escape4.go](Lesson2/escape/escape3.go)
+	2. 当编译器发现一个值的大小无法在栈上存放的时候会将其分配在堆上
 
-```bash
-./escape4.go:3:6: can inline main with cost 20 as: func() { i := 0; pp := new(*int); *pp = &i; _ = pp }
-./escape4.go:4:2: i escapes to heap:
-./escape4.go:4:2:   flow: {heap} = &i:
-./escape4.go:4:2:     from &i (address-of) at ./escape4.go:6:8
-./escape4.go:4:2:     from *pp = &i (assign) at ./escape4.go:6:6
-./escape4.go:4:2: moved to heap: i
-./escape4.go:5:11: new(*int) does not escape
-```
+	3. 当编译器无法在编译时知道值的大小时就选择在堆上进行分配
 
+		```go
+		package main
 
-6. 赋值给
+		import (
+			"bytes"
+		)
+
+		func main() {
+			size := 10
+			// size的值是编译时无法知道的，如果这里改成10，就不会有逃逸分析了
+			b := make([]byte, size)
+			c := bytes.NewBuffer(b)
+			c.WriteString("test")
+		}
+		```
+
+		逃逸分析的结果如下[escape2.go](Lesson2/escape/escape2.go):
+
+		```bash
+		./escape2.go:7:6: cannot inline main: function too complex: cost 84 exceeds budget 80
+		./escape2.go:10:22: inlining call to bytes.NewBuffer func([]byte) *bytes.Buffer { return &bytes.Buffer literal }
+		./escape2.go:9:11: make([]byte, size) escapes to heap:
+		./escape2.go:9:11:   flow: {heap} = &{storage for make([]byte, size)}:
+		./escape2.go:9:11:     from make([]byte, size) (non-constant size) at ./escape2.go:9:11
+		./escape2.go:9:11: make([]byte, size) escapes to heap
+		./escape2.go:10:22: &bytes.Buffer literal does not escape
+		```
+
+	4. 当变量赋值给interface或者函数的时候会导致逃逸
+
+		```go
+		package main
+
+		import (
+			"bytes"
+		)
+
+		//go:noinline
+		func InterfaceMethod(value interface{}) {
+		}
+
+		func main() {
+			size := 10
+			b := make([]byte, size)
+			c := bytes.NewBuffer(b)
+			c.WriteString("test")
+			// 导致逃逸分析
+			InterfaceMethod(c)
+		}
+
+		```
+
+		逃逸分析的结果如下[escape3.go](Lesson2/escape/escape3.go):
+
+		```bash
+		./escape3.go:8:6: cannot inline InterfaceMethod: marked go:noinline
+		./escape3.go:11:6: cannot inline main: function too complex: cost 145 exceeds budget 80
+		./escape3.go:14:22: inlining call to bytes.NewBuffer func([]byte) *bytes.Buffer { return &bytes.Buffer literal }
+		./escape3.go:8:22: value does not escape
+		./escape3.go:13:11: make([]byte, size) escapes to heap:
+		./escape3.go:13:11:   flow: {heap} = &{storage for make([]byte, size)}:
+		./escape3.go:13:11:     from make([]byte, size) (non-constant size) at ./escape3.go:13:11
+		./escape3.go:13:11: make([]byte, size) escapes to heap
+		./escape3.go:14:22: &bytes.Buffer literal does not escape
+		```
+
+	5. 赋值给指针导致的逃逸
+
+		```go
+		func BenchmarkAssignmentIndirect(b *testing.B) {
+			type X struct {
+				p *int
+			}
+			for i := 0; i < b.N; i++ {
+				var i1 int
+				x1 := &X{
+					p: &i1, // GOOD: i1 does not escape
+				}
+				_ = x1
+
+				var i2 int
+				x2 := &X{}
+				x2.p = &i2 // BAD: Cause of i2 escape
+			}
+		}
+		```
+
+		逃逸分析的结果如下[example1_test.go](Lesson2/escape/flaws/example1/example1_test.go)
+
+		```bash
+		./example1_test.go:5:6: cannot inline BenchmarkAssignmentIndirect: unhandled op DCLTYPE
+		./example1_test.go:16:7: i2 escapes to heap:
+		./example1_test.go:16:7:   flow: {heap} = &i2:
+		./example1_test.go:16:7:     from &i2 (address-of) at ./example1_test.go:18:10
+		./example1_test.go:16:7:     from x2.p = &i2 (assign) at ./example1_test.go:18:8
+		./example1_test.go:5:34: b does not escape
+		./example1_test.go:16:7: moved to heap: i2
+		./example1_test.go:11:9: &X literal does not escape
+		./example1_test.go:17:9: &X literal does not escape
+		```
+
+		如果是赋值给指针的指针也是会导致逃逸的。
+
+		```go
+		package main
+
+		func main() {
+			i := 0
+			pp := new(*int)
+			*pp = &i // BAD: i escapes
+			_ = pp
+		}
+		```
+
+		逃逸分析的结果如下[escape4.go](Lesson2/escape/escape3.go)
+
+		```bash
+		./escape4.go:3:6: can inline main with cost 20 as: func() { i := 0; pp := new(*int); *pp = &i; _ = pp }
+		./escape4.go:4:2: i escapes to heap:
+		./escape4.go:4:2:   flow: {heap} = &i:
+		./escape4.go:4:2:     from &i (address-of) at ./escape4.go:6:8
+		./escape4.go:4:2:     from *pp = &i (assign) at ./escape4.go:6:6
+		./escape4.go:4:2: moved to heap: i
+		./escape4.go:5:11: new(*int) does not escape
+		```
 
 
 对于接口的使用意见:
@@ -465,80 +480,81 @@ Don’t use an interface:
 2. to generalize an algorithm.
 3. when users can declare their own interfaces.
 
-> `go build -gcflags "-m -m"` 添加gcflags可以显示处哪些变量进行了逃逸
+!!! tip
+	`go build -gcflags "-m -m"` 添加gcflags可以显示处哪些变量进行了逃逸
 
 
 ### Garbage Collection
 
 垃圾回收几个阶段:
 
+
 1. Mark Setup - STW
 
-在这个阶段需要找到一个安全点，让所有的goroutine都停下来，在1.14之前，Go中的函数调用是一个安全点，当gorountine执行函数调用的时候就停止，但是这个存在一个问题，如果一个goroutine
-一直在做密集的计算，没有进行函数调用，这会导致GC的采集停止不前。在1.14后Go中引入了抢占来解决这个问题。
+	在这个阶段需要找到一个安全点，让所有的goroutine都停下来，在1.14之前，Go中的函数调用是一个安全点，当gorountine执行函数调用的时候就停止，但是这个存在一个问题，如果一个goroutine
+	一直在做密集的计算，没有进行函数调用，这会导致GC的采集停止不前。在1.14后Go中引入了抢占来解决这个问题。
 
-[runtime: non-cooperative goroutine preemption](https://github.com/golang/go/issues/24543)
+	[runtime: non-cooperative goroutine preemption](https://github.com/golang/go/issues/24543)
 
 2. Marking - Concurrent
 
-在标记阶段，垃圾回收会控制自己所占用的CPU为整体的1/4(其他的CPU用于程序运行)，在这个阶段，GC会扫描goroutine的栈，找到栈中指向堆的指针进行标记。标记阶段的吞吐量为`1MB/ms * 1/4 * CPU核心数`
-如果在标记阶段，应用分配内存的速度大于标记的速度，这个时候会启用`Mark Assist`占用更多的CPU来协助进行标记。但是不会占用太多的`Mark Assist`，与其这样占用太多`Mark Assist`，还不如今早开启下一次GC回收。
-所以GC会控制`Mark Assist`的数量。
+	在标记阶段，垃圾回收会控制自己所占用的CPU为整体的1/4(其他的CPU用于程序运行)，在这个阶段，GC会扫描goroutine的栈，找到栈中指向堆的指针进行标记。标记阶段的吞吐量为`1MB/ms * 1/4 * CPU核心数`
+	如果在标记阶段，应用分配内存的速度大于标记的速度，这个时候会启用`Mark Assist`占用更多的CPU来协助进行标记。但是不会占用太多的`Mark Assist`，与其这样占用太多`Mark Assist`，还不如今早开启下一次GC回收。所以GC会控制`Mark Assist`的数量。
 
 
 3. Mark Termination - STW
 
-标记阶段的最后工作是Mark Termination，关闭内存屏障，停止后台标记以及辅助标记，做一些清理工作，整个过程也需要STW，大概需要60-90微秒。在此之后，所有的P都能继续为应用程序G服务了。
+	标记阶段的最后工作是Mark Termination，关闭内存屏障，停止后台标记以及辅助标记，做一些清理工作，整个过程也需要STW，大概需要60-90微秒。在此之后，所有的P都能继续为应用程序G服务了。
 
 4. Sweeping - Concurrent
 
-在标记工作完成之后，剩下的就是清理过程了，清理过程的本质是将没有被使用的内存块整理回收给上一个内存管理层级(mcache -> mcentral -> mheap -> OS)，清理回收的开销被平摊到应用程序的每次内存分配操作中，
-直到所有内存都Sweeping完成。当然每个层级不会全部将待清理内存都归还给上一级，避免下次分配再申请的开销，比如Go1.12对mheap归还OS内存做了优化，使用NADV_FREE延迟归还内存。
+	在标记工作完成之后，剩下的就是清理过程了，清理过程的本质是将没有被使用的内存块整理回收给上一个内存管理层级(mcache -> mcentral -> mheap -> OS)，清理回收的开销被平摊到应用程序的每次内存分配操作中，
+	直到所有内存都Sweeping完成。当然每个层级不会全部将待清理内存都归还给上一级，避免下次分配再申请的开销，比如Go1.12对mheap归还OS内存做了优化，使用NADV_FREE延迟归还内存。
 
 
 
-* GC percentage
-runtime中有一个配置选项叫做 GC Percentage，默认值是100。这个值代表了下一次回收开始之前，有多少新的堆内存可以分配。GC Percentage设置为100意味着，基于回收完成之后被标记为生存的堆内存数量，下一次回收的开始必须在有100%以上的新内存分配到堆内存时启动。
-如果新分配的内存并没有到达100%就触发了下一次GC，这个可能是因为应用内存分配速度太快，GC不希望分配太多的`Mark Assist`，因此尽快的启动了下一次GC。
+**GC percentage**
+
+runtime中有一个配置选项叫做 GC Percentage，默认值是100。这个值代表了下一次回收开始之前，有多少新的堆内存可以分配。GC Percentage设置为100意味着，基于回收完成之后被标记为生存的堆内存数量，下一次回收的开始必须在有100%以上的新内存分配到堆内存时启动。如果新分配的内存并没有到达100%就触发了下一次GC，这个可能是因为应用内存分配速度太快，GC不希望分配太多的`Mark Assist`，因此尽快的启动了下一次GC。
 
 
-* GC Trcae
+**GC Trcae**
 
 1. `GODEBUG=gctrace=1` 开启GC Trace
 2. `GODEBUG=gctrace=1,gcpacertrace=1` 开启更详细的GC Trace
 
-```shell
-gc 1405 @6.068s 11%: 0.058+1.2+0.083 ms clock, 0.70+2.5/1.5/0+0.99 ms cpu, 7->11->6 MB, 10 MB goal, 12 P
-gc 1406 @6.070s 11%: 0.051+1.8+0.076 ms clock, 0.61+2.0/2.5/0+0.91 ms cpu, 8->11->6 MB, 13 MB goal, 12 P
-gc 1407 @6.073s 11%: 0.052+1.8+0.20 ms clock, 0.62+1.5/2.2/0+2.4 ms cpu, 8->14->8 MB, 13 MB goal, 12 P
+	```shell
+	gc 1405 @6.068s 11%: 0.058+1.2+0.083 ms clock, 0.70+2.5/1.5/0+0.99 ms cpu, 7->11->6 MB, 10 MB goal, 12 P
+	gc 1406 @6.070s 11%: 0.051+1.8+0.076 ms clock, 0.61+2.0/2.5/0+0.91 ms cpu, 8->11->6 MB, 13 MB goal, 12 P
+	gc 1407 @6.073s 11%: 0.052+1.8+0.20 ms clock, 0.62+1.5/2.2/0+2.4 ms cpu, 8->14->8 MB, 13 MB goal, 12 P
 
-字段含义如下:
-// General
-gc 1405     : The 1405 GC run since the program started
-@6.068s     : Six seconds since the program started
-11%         : Eleven percent of the available CPU so far has been spent in GC
+	字段含义如下:
+	// General
+	gc 1405     : The 1405 GC run since the program started
+	@6.068s     : Six seconds since the program started
+	11%         : Eleven percent of the available CPU so far has been spent in GC
 
-// Wall-Clock
-0.058ms     : STW        : Mark Start       - Write Barrier on
-1.2ms       : Concurrent : Marking
-0.083ms     : STW        : Mark Termination - Write Barrier off and clean up
+	// Wall-Clock
+	0.058ms     : STW        : Mark Start       - Write Barrier on
+	1.2ms       : Concurrent : Marking
+	0.083ms     : STW        : Mark Termination - Write Barrier off and clean up
 
-// CPU Time
-0.70ms      : STW        : Mark Start
-2.5ms       : Concurrent : Mark - Assist Time (GC performed in line with allocation)
-1.5ms       : Concurrent : Mark - Background GC time
-0ms         : Concurrent : Mark - Idle GC time
-0.99ms      : STW        : Mark Term
+	// CPU Time
+	0.70ms      : STW        : Mark Start
+	2.5ms       : Concurrent : Mark - Assist Time (GC performed in line with allocation)
+	1.5ms       : Concurrent : Mark - Background GC time
+	0ms         : Concurrent : Mark - Idle GC time
+	0.99ms      : STW        : Mark Term
 
-// Memory
-7MB         : Heap memory in-use before the Marking started
-11MB        : Heap memory in-use after the Marking finished
-6MB         : Heap memory marked as live after the Marking finished
-10MB        : Collection goal for heap memory in-use after Marking finished
+	// Memory
+	7MB         : Heap memory in-use before the Marking started
+	11MB        : Heap memory in-use after the Marking finished
+	6MB         : Heap memory marked as live after the Marking finished
+	10MB        : Collection goal for heap memory in-use after Marking finished
 
-// Threads
-12P         : Number of logical processors or threads used to run Goroutines
-```
+	// Threads
+	12P         : Number of logical processors or threads used to run Goroutines
+	```
 
 GC调优的意见:
 
@@ -551,51 +567,51 @@ GC调优的意见:
 ### Compiler And Runtime Optimizations
 
 1. Non-scannable objects
-Garbage collector does not scan underlying buffers of slices, channels and maps when element type does not contain pointers (both key and value for maps). 
-垃圾回收期不会扫描元素不是指针类型的map、slices、channnel。下面这个map就不会影响GC的采集时间。
+	Garbage collector does not scan underlying buffers of slices, channels and maps when element type does not contain pointers (both key and value for maps). 
+	
+	垃圾回收期不会扫描元素是指针类型的map、slices、channnel。下面这个map就不会影响GC的采集时间。
 
-```go
-type Key [64]byte // SHA-512 hash
-type Value struct {
-	Name      [32]byte
-	Balance   uint64
-	Timestamp int64
-}
-m := make(map[Key]Value, 1e8)
-```
+	```go
+	type Key [64]byte // SHA-512 hash
+	type Value struct {
+		Name      [32]byte
+		Balance   uint64
+		Timestamp int64
+	}
+	m := make(map[Key]Value, 1e8)
+	```
 
 2. Function Inlining
 
-只有小的、短的函数才会内联，函数中要小于40个表达式、并且不包含复杂的语句，比如loop、labels、closures、panic、recover、select、switch等
+	只有小的、短的函数才会内联，函数中要小于40个表达式、并且不包含复杂的语句，比如loop、labels、closures、panic、recover、select、switch等
 
 3. `go build -x`
 
-显示build的过程
+	显示build的过程
 
 4. `go build -gcflags="-S"`
 
-显示golang中间汇编结果
+	显示golang中间汇编结果
 
 5. `go tool objdump -s main.main hello`
 
-二进制反汇编
+	二进制反汇编
 
 6. `go tool nm escape1`
 
-查看二进制符号信息
+	查看二进制符号信息
 
 7. `GOSSAFUNC=main go build && open ssa.html`
 
-SSA 代表 static single-assignment，是一种IR(中间表示代码)，要保证每个变量只被赋值一次。
+	SSA 代表 static single-assignment，是一种IR(中间表示代码)，要保证每个变量只被赋值一次。
 
 8. `go build -gcflags="-m"`
 
-逃逸分析
+	逃逸分析
 
 9. `go build -gcflags="-l -N"`
 
-禁止优化和禁止内联
-
+	禁止优化和禁止内联
 
 
 ### Constans
@@ -605,113 +621,113 @@ SSA 代表 static single-assignment，是一种IR(中间表示代码)，要保�
 
 * 常量存在默认类型
 
-```go
-fmt.Printf("%T %v\n", 0, 0)
-fmt.Printf("%T %v\n", 0.0, 0.0)
-fmt.Printf("%T %v\n", 'x', 'x')
-fmt.Printf("%T %v\n", 0i, 0i)
-	
-// 输出结果
-int 0
-float64 0
-int32 120
-complex128 (0+0i)
-```
+	```go
+	fmt.Printf("%T %v\n", 0, 0)
+	fmt.Printf("%T %v\n", 0.0, 0.0)
+	fmt.Printf("%T %v\n", 'x', 'x')
+	fmt.Printf("%T %v\n", 0i, 0i)
+		
+	// 输出结果
+	int 0
+	float64 0
+	int32 120
+	complex128 (0+0i)
+	```
 
 
 * 不同类型的常量操作，会进行类型转换
 
-转换规则按照integer, rune, floating-point, complex.的先后顺序
+	转换规则按照integer, rune, floating-point, complex.的先后顺序
 
-```go
-var answer = 3 * 0.33	// 按照上面的规则，integer会转换为floating-point，最终结果就是浮点数了
+	```go
+	var answer = 3 * 0.33	// 按照上面的规则，integer会转换为floating-point，最终结果就是浮点数了
 
-```
+	```
 
 * 数字常量可以说是integer, floating-point, complex and rune等四种kind，此外还有bool、string两种kind类型的常量。
 * 常量不是变量
 * 常量只存在于编译时
 * 无类型的常量可以隐式转换为有类型的常量，但是变量不行需要强制转换
 
-```go
-type Duration int64
-// Common durations. There is no definition for units of Day or larger
-// to avoid confusion across daylight savings time zone transitions.
-const (
-        Nanosecond  Duration = 1
-        Microsecond          = 1000 * Nanosecond
-        Millisecond          = 1000 * Microsecond
-        Second               = 1000 * Millisecond
-        Minute               = 60 * Second
-        Hour                 = 60 * Minute
-)
-// Add returns the time t+d.
-func (t Time) Add(d Duration) Time
+	```go
+	type Duration int64
+	// Common durations. There is no definition for units of Day or larger
+	// to avoid confusion across daylight savings time zone transitions.
+	const (
+			Nanosecond  Duration = 1
+			Microsecond          = 1000 * Nanosecond
+			Millisecond          = 1000 * Microsecond
+			Second               = 1000 * Millisecond
+			Minute               = 60 * Second
+			Hour                 = 60 * Minute
+	)
+	// Add returns the time t+d.
+	func (t Time) Add(d Duration) Time
 
-func main() {
+	func main() {
 
-	// Use the time package to get the current date/time.
-	now := time.Now()
+		// Use the time package to get the current date/time.
+		now := time.Now()
 
-	// 这里的5转换成常量Duration了
-	// Subtract 5 nanoseconds from now using a literal constant.
-	literal := now.Add(-5)
+		// 这里的5转换成常量Duration了
+		// Subtract 5 nanoseconds from now using a literal constant.
+		literal := now.Add(-5)
 
-	// Subtract 5 seconds from now using a declared constant.
-	const timeout = 5 * time.Second // time.Duration(5) * time.Duration(1000000000)
-	constant := now.Add(-timeout)
+		// Subtract 5 seconds from now using a declared constant.
+		const timeout = 5 * time.Second // time.Duration(5) * time.Duration(1000000000)
+		constant := now.Add(-timeout)
 
-	// Subtract 5 nanoseconds from now using a variable of type int64.
-	minusFive := int64(-5)
-	variable := now.Add(minusFive)
+		// Subtract 5 nanoseconds from now using a variable of type int64.
+		minusFive := int64(-5)
+		variable := now.Add(minusFive)
 
-	// example4.go:50: cannot use minusFive (type int64) as type time.Duration in argument to now.Add
+		// example4.go:50: cannot use minusFive (type int64) as type time.Duration in argument to now.Add
 
-	// Display the values.
-	fmt.Printf("Now     : %v\n", now)
-	fmt.Printf("Literal : %v\n", literal)
-	fmt.Printf("Constant: %v\n", constant)
-	fmt.Printf("Variable: %v\n", variable)
-}
-```
+		// Display the values.
+		fmt.Printf("Now     : %v\n", now)
+		fmt.Printf("Literal : %v\n", literal)
+		fmt.Printf("Constant: %v\n", constant)
+		fmt.Printf("Variable: %v\n", variable)
+	}
+	```
 
 * 无类型的常量有Kind，但是没有类型
 
-```go
-	// 无类型常量，精度理论上无限制
-	// Untyped Constants.
-	const ui = 12345    // kind: integer
-	const uf = 3.141592 // kind: floating-point
+	```go
+		// 无类型常量，精度理论上无限制
+		// Untyped Constants.
+		const ui = 12345    // kind: integer
+		const uf = 3.141592 // kind: floating-point
 
-	// 下面就是有类型的常量了，这是有精度限制的，取决于常量类型
-	// Typed Constants still use the constant type system but their precision
-	// is restricted.
-	const ti int = 12345        // type: int
-	const tf float64 = 3.141592 // type: float64
-	// 这里声明uint8的值为1000就超过限制了，会编译报错，但是改成无类型的常量就没有这个限制了
-	// ./constants.go:XX: constant 1000 overflows uint8
-	// const myUint8 uint8 = 1000
-	
-	// 有类型和无类型进行算术运算会进行类型转换。
-	const one int8 = 1
-	const two = 2 * one // int8(2) * int8(1)
-```
+		// 下面就是有类型的常量了，这是有精度限制的，取决于常量类型
+		// Typed Constants still use the constant type system but their precision
+		// is restricted.
+		const ti int = 12345        // type: int
+		const tf float64 = 3.141592 // type: float64
+		// 这里声明uint8的值为1000就超过限制了，会编译报错，但是改成无类型的常量就没有这个限制了
+		// ./constants.go:XX: constant 1000 overflows uint8
+		// const myUint8 uint8 = 1000
+		
+		// 有类型和无类型进行算术运算会进行类型转换。
+		const one int8 = 1
+		const two = 2 * one // int8(2) * int8(1)
+	```
 
 * integer常量精度至少256bits
 
-```go
-const (
-	// Max integer value on 64 bit architecture.
-	maxInt = 9223372036854775807
+	```go
+	const (
+		// Max integer value on 64 bit architecture.
+		maxInt = 9223372036854775807
 
-	// Much larger value than int64.
-	bigger = 9223372036854775808543522345
+		// Much larger value than int64.
+		bigger = 9223372036854775808543522345
 
-	// 有类型的常量受到了类型的精度限制，无类型常量则没有限制
-	// Will NOT compile
-	// biggerInt int64 = 9223372036854775808543522345
-)
-```
+		// 有类型的常量受到了类型的精度限制，无类型常量则没有限制
+		// Will NOT compile
+		// biggerInt int64 = 9223372036854775808543522345
+	)
+	```
 
 
 ### Array
@@ -1213,8 +1229,8 @@ func main() {
 * 接口本身就是引用类型，不需要通过指针来共享
 * 如何判断一个类型是否实现了某个接口?
 
- 1. 对于一个指针来说，其方法集包含了值语义和指针语义作为reciver实现的方法
- 2. 对于一个值来说，其方法集仅限于使用值语义作为reciver实现的方法
+	1. 对于一个指针来说，其方法集包含了值语义和指针语义作为reciver实现的方法
+	2. 对于一个值来说，其方法集仅限于使用值语义作为reciver实现的方法
 
 下面这个例子中，user作为值来说，其方法集只有使用值作为receiver的方法，但是User的Notify是用指针作为receiver来实现的，因此user并没有实现Notify接口，
 把它换成指针类型就可以了。
@@ -1278,12 +1294,13 @@ func main() {
 User: Sending User Email To john smith<john@email.com>
 ```
 
-> 当我们嵌入一个类型时，该类型的方法成为外部类型的方法，但是当它们被调用时，该方法的接收者是内部类型，而不是外部类型。
+!!! tip
+	当我们嵌入一个类型时，该类型的方法成为外部类型的方法，但是当它们被调用时，该方法的接收者是内部类型，而不是外部类型。
 
 给定一个结构类型S和一个名为T的类型，那么该结构体S的方法集为:
 
- 1. 如果S包含匿名字段T，则`S`和`*S`的方法集会包括以T作为receiver的方法。
- 2. `*S`还额外包含了以`*T`作为receiver的方法
+	1. 如果S包含匿名字段T，则`S`和`*S`的方法集会包括以T作为receiver的方法。
+	2. `*S`还额外包含了以`*T`作为receiver的方法
 
 
 * 外部类型和嵌入式类型实现了相同的interface怎么办?
@@ -1349,7 +1366,8 @@ func main() {
 }
 ```
 
-> 当使用值接收器（值语义）实现接口时，可以在接口内部存储值和地址的副本。但是，当使用指针接收器（指针语义）实现接口时，只能存储地址的副本。
+!!! tip
+	当使用值接收器（值语义）实现接口时，可以在接口内部存储值和地址的副本。但是，当使用指针接收器（指针语义）实现接口时，只能存储地址的副本。
 
 ```go
 package main
@@ -1457,7 +1475,7 @@ Addr User: 0xc000010200  Word Value: 0xc000010200  Ptr Value: {bill}
 
 ### reflection
 
-1. 反射是interface到反射对象的转换
+* 反射是interface到反射对象的转换
 
 ```go
 package main
@@ -1513,7 +1531,7 @@ var x MyInt = 7
 v := reflect.ValueOf(x)
 ```
 
-2. 反射也可以从反射对象转换为interface
+* 反射也可以从反射对象转换为interface
 
 ```go
 package main
@@ -1531,7 +1549,7 @@ func main() {
 }
 ```
 
-3. 要修改反射对象，该值必须可设置。
+* 要修改反射对象，该值必须可设置。
 
 可设置是反射对象的属性，并非所有反射对象都具有它。
 
@@ -1751,6 +1769,7 @@ func (d Dog) Speak() {}
 	4. 接口未将API与更改分离
 
 满足上面条件则没有必要声明接口，下面这个checklist则是需要使用接口的场景:
+
 	1. API的用户需要提供实现细节的时候
 	2. APi有多个实现的时候
 	3. 识别出API中可以更改的部分并需要将其去耦合
@@ -1840,7 +1859,7 @@ if v, is := mvs.(car); is {
 
 ## Error Handing
 
-1. 当错误的上下文比较复杂的时候，通过创建自定义的错误类型类似承载
+* 当错误的上下文比较复杂的时候，通过创建自定义的错误类型类似承载
 
 ```go
 type SyntaxError struct {
@@ -1851,7 +1870,7 @@ type SyntaxError struct {
 func (e *SyntaxError) Error() string { return e.msg }
 ```
 
-2. 对于一些静态的、简单的错误可以直接使用标准库中的error
+* 对于一些静态的、简单的错误可以直接使用标准库中的error
 
 ```go
 func Sqrt(f float64) (float64, error) {
@@ -1861,7 +1880,7 @@ func Sqrt(f float64) (float64, error) {
 }
 ```
 
-3. 统一定义Package级别的错误(Err前缀，这是go定义错误的命名规范)
+* 统一定义Package级别的错误(Err前缀，这是go定义错误的命名规范)
 
 
 ```go
@@ -1888,7 +1907,7 @@ if err != nil {
 }
 ```
 
-4. 小心error的比较
+* 小心error的比较
 
 error是个interface，intreface的比较要看其内部存储的是值还是指针，实际比较的时候是用内部存储的类型来比较的，如果存储的指针，那么总是不相同，
 如果存储的是值会进行值的比较。
@@ -1934,10 +1953,10 @@ func main() {
 
 ```
 
-> 一旦我们使用指针作为receve就标志着我们只能存储指针到interface中，因此这个时候比较interface就总是比较指针了。
-> 这种情况下，可以预先在pacakge级别定义好一系列的错误。这样就可以进行比较了，因为此时的接口都是指向相同的错误变量
+!!! tip
+	一旦我们使用指针作为receve就标志着我们只能存储指针到interface中，因此这个时候比较interface就总是比较指针了。这种情况下，可以预先在pacakge级别定义好一系列的错误。这样就可以进行比较了，因为此时的接口都是指向相同的错误变量
 
-5. 小心error的赋值
+* 小心error的赋值
 
 error是个interface，一个interface通常来说内部有两个指针，一个指针指向类型，一个指针指向值，当我们将一个自定义的error类型的nil指针赋值给error的时候，
 实际上其类型部分已经不是nil了，只是值的部分是nil而已。一个intreface如果是nil的话，就必须内部的所有指针都是nil。 
@@ -1967,13 +1986,13 @@ func main() {
 
 ```
 
-6. `github.com/pkg/errors`
+* `github.com/pkg/errors`
 
 log和error是需要一起处理的，error的地方都是需要记录日志的，记录的日志需要能够帮助我们debug问题。
 
-7. 面向失败编程，而不是成功，因此Go没有实现异常。
+* 面向失败编程，而不是成功，因此Go没有实现异常。
 
-8. 错误处理方式的进化之路
+* 错误处理方式的进化之路
 
 ```go
 // Get fetches and unmarshals the JSON blob for the key k into v.
@@ -2167,189 +2186,186 @@ Gcopystack,       // 8 in this state when newstack is moving the stack
 
 * Concurrency Pattern
 	
-	1. Generator
+	* Generator
 
-```go
-    c := boring("boring!") // Function returning a channel.
-    for i := 0; i < 5; i++ {
-        fmt.Printf("You say: %q\n", <-c)
-    }
-    fmt.Println("You're boring; I'm leaving.")
-
-	func boring(msg string) <-chan string { // Returns receive-only channel of strings.
-		c := make(chan string)
-		go func() { // We launch the goroutine from inside the function.
-			for i := 0; ; i++ {
-				c <- fmt.Sprintf("%s %d", msg, i)
-				time.Sleep(time.Duration(rand.Intn(1e3)) * time.Millisecond)
+		```go
+			c := boring("boring!") // Function returning a channel.
+			for i := 0; i < 5; i++ {
+				fmt.Printf("You say: %q\n", <-c)
 			}
-		}()
-		return c // Return the channel to the caller.
-	}
-```
+			fmt.Println("You're boring; I'm leaving.")
 
-> 上面的代码存在协程泄漏，需要考虑加入context
+			func boring(msg string) <-chan string { // Returns receive-only channel of strings.
+				c := make(chan string)
+				go func() { // We launch the goroutine from inside the function.
+					for i := 0; ; i++ {
+						c <- fmt.Sprintf("%s %d", msg, i)
+						time.Sleep(time.Duration(rand.Intn(1e3)) * time.Millisecond)
+					}
+				}()
+				return c // Return the channel to the caller.
+			}
+		```
+		
+		!!! tip
+			上面的代码存在协程泄漏，需要考虑加入context
 
-	2. Fan in
+	* Fan in
 
-```go
-func merge(cs ...<-chan int) <-chan int {
-    var wg sync.WaitGroup
-    out := make(chan int)
+		```go
+		func merge(cs ...<-chan int) <-chan int {
+			var wg sync.WaitGroup
+			out := make(chan int)
 
-    // Start an output goroutine for each input channel in cs.  output
-    // copies values from c to out until c is closed, then calls wg.Done.
-    output := func(c <-chan int) {
-        for n := range c {
-            out <- n
-        }
-        wg.Done()
-    }
-    wg.Add(len(cs))
-    for _, c := range cs {
-        go output(c)
-    }
+			// Start an output goroutine for each input channel in cs.  output
+			// copies values from c to out until c is closed, then calls wg.Done.
+			output := func(c <-chan int) {
+				for n := range c {
+					out <- n
+				}
+				wg.Done()
+			}
+			wg.Add(len(cs))
+			for _, c := range cs {
+				go output(c)
+			}
 
-    // Start a goroutine to close out once all the output goroutines are
-    // done.  This must start after the wg.Add call.
-    go func() {
-        wg.Wait()
-        close(out)
-    }()
-    return out
-}
-```
+			// Start a goroutine to close out once all the output goroutines are
+			// done.  This must start after the wg.Add call.
+			go func() {
+				wg.Wait()
+				close(out)
+			}()
+			return out
+		}
+		```
 
 
-	3. Fan out
+	* Fan out
 
-```go
-func fanOutSem() {
-	emps := 2000
-	ch := make(chan string, emps)
+		```go
+		func fanOutSem() {
+			emps := 2000
+			ch := make(chan string, emps)
 
-	g := runtime.GOMAXPROCS(0)
-	sem := make(chan bool, g)
+			g := runtime.GOMAXPROCS(0)
+			sem := make(chan bool, g)
 
-	for e := 0; e < emps; e++ {
-		go func(emp int) {
-			sem <- true
-			{
-				time.Sleep(time.Duration(rand.Intn(200)) * time.Millisecond)
+			for e := 0; e < emps; e++ {
+				go func(emp int) {
+					sem <- true
+					{
+						time.Sleep(time.Duration(rand.Intn(200)) * time.Millisecond)
+						ch <- "paper"
+						fmt.Println("employee : sent signal :", emp)
+					}
+					<-sem
+				}(e)
+			}
+
+			for emps > 0 {
+				p := <-ch
+				emps--
+				fmt.Println(p)
+				fmt.Println("manager : recv'd signal :", emps)
+			}
+
+			time.Sleep(time.Second)
+		}
+		```
+
+	* Drop
+
+		```go
+		func drop() {
+			const cap = 100
+			ch := make(chan string, cap)
+
+			go func() {
+				for p := range ch {
+					fmt.Println("employee : recv'd signal :", p)
+				}
+			}()
+
+			const work = 2000
+			for w := 0; w < work; w++ {
+				select {
+				case ch <- "paper":
+					fmt.Println("manager : sent signal :", w)
+				default:
+					fmt.Println("manager : dropped data :", w)
+				}
+			}
+
+			close(ch)
+			fmt.Println("manager : sent shutdown signal")
+
+			time.Sleep(time.Second)
+		}
+		```
+
+	* pooling
+
+		```go
+		func pooling() {
+			ch := make(chan string)
+
+			g := runtime.GOMAXPROCS(0)
+			for e := 0; e < g; e++ {
+				go func(emp int) {
+					for p := range ch {
+						fmt.Printf("employee %d : recv'd signal : %s\n", emp, p)
+					}
+					fmt.Printf("employee %d : recv'd shutdown signal\n", emp)
+				}(e)
+			}
+
+			const work = 100
+			for w := 0; w < work; w++ {
 				ch <- "paper"
-				fmt.Println("employee : sent signal :", emp)
+				fmt.Println("manager : sent signal :", w)
 			}
-			<-sem
-		}(e)
-	}
 
-	for emps > 0 {
-		p := <-ch
-		emps--
-		fmt.Println(p)
-		fmt.Println("manager : recv'd signal :", emps)
-	}
+			close(ch)
+			fmt.Println("manager : sent shutdown signal")
 
-	time.Sleep(time.Second)
-	fmt.Println("-------------------------------------------------------------")
-}
-
-```
-
-	4. Drop
-
-```go
-func drop() {
-	const cap = 100
-	ch := make(chan string, cap)
-
-	go func() {
-		for p := range ch {
-			fmt.Println("employee : recv'd signal :", p)
+			time.Sleep(time.Second)
 		}
-	}()
+		```
 
-	const work = 2000
-	for w := 0; w < work; w++ {
-		select {
-		case ch <- "paper":
-			fmt.Println("manager : sent signal :", w)
-		default:
-			fmt.Println("manager : dropped data :", w)
+	* Pipeline
+
+		```go
+		func gen(nums ...int) <-chan int {
+			out := make(chan int)
+			go func() {
+				for _, n := range nums {
+					out <- n
+				}
+				close(out)
+			}()
+			return out
 		}
-	}
 
-	close(ch)
-	fmt.Println("manager : sent shutdown signal")
+		func sq(in <-chan int) <-chan int {
+			out := make(chan int)
+			go func() {
+				for n := range in {
+					out <- n * n
+				}
+				close(out)
+			}()
+			return out
+		}
 
-	time.Sleep(time.Second)
-	fmt.Println("-------------------------------------------------------------")
-}
-```
-
-	5. pooling
-
-```go
-func pooling() {
-	ch := make(chan string)
-
-	g := runtime.GOMAXPROCS(0)
-	for e := 0; e < g; e++ {
-		go func(emp int) {
-			for p := range ch {
-				fmt.Printf("employee %d : recv'd signal : %s\n", emp, p)
+		func main() {
+			// Set up the pipeline and consume the output.
+			for n := range sq(sq(gen(2, 3))) {
+				fmt.Println(n) // 16 then 81
 			}
-			fmt.Printf("employee %d : recv'd shutdown signal\n", emp)
-		}(e)
-	}
+		}
 
-	const work = 100
-	for w := 0; w < work; w++ {
-		ch <- "paper"
-		fmt.Println("manager : sent signal :", w)
-	}
-
-	close(ch)
-	fmt.Println("manager : sent shutdown signal")
-
-	time.Sleep(time.Second)
-	fmt.Println("-------------------------------------------------------------")
-}
-```
-
-	5. Pipeline
-
-```go
-func gen(nums ...int) <-chan int {
-    out := make(chan int)
-    go func() {
-        for _, n := range nums {
-            out <- n
-        }
-        close(out)
-    }()
-    return out
-}
-
-func sq(in <-chan int) <-chan int {
-    out := make(chan int)
-    go func() {
-        for n := range in {
-            out <- n * n
-        }
-        close(out)
-    }()
-    return out
-}
-
-func main() {
-    // Set up the pipeline and consume the output.
-    for n := range sq(sq(gen(2, 3))) {
-        fmt.Println(n) // 16 then 81
-    }
-}
-
-```
+		```
 
 ## Data Race
 
