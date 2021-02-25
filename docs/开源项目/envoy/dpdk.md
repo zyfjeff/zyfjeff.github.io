@@ -1,3 +1,4 @@
+# DPDK
 ## 一些开源实现
 
 1. [mTCP](https://github.com/eunyoung14/mtcp/blob/master/README)
@@ -19,8 +20,11 @@
 基于OS内核的转发，数据包的路径是: 网口->DMA->内核缓冲区->用户态空间。
 
 ## DPDK技术带来的改变
+
 1. 用户态驱动，绕过内核驱动收包，减少内存拷贝
-![stack dpdk](dpdk-stack.png)
+
+![stack dpdk](img/dpdk.png)
+
 2. 支持 CPU 亲和性绑定，支持对多核多线程的支撑，每个核对应一个免锁队列，减少线程调度和锁的消耗
 3. 对 NUMA 的优化，尽量在处理时不跨 NUMA。
 4. 利用 HugePage 技术，减少 CacheMiss 的情况

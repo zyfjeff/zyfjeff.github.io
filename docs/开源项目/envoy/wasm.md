@@ -1,6 +1,4 @@
-
-proxy-wasm-host、proxy-wasm-cpp-sdk、envoy-wasm
-
+# Envoy Proxy Wasm分析
 ## To implement a WASM filter
 
 1. Implement a root context class which inherits base root context class
