@@ -20,20 +20,22 @@ hide:
 
 * `ThreadLocalCluster`
     
-    这个接口是真正暴露给worker线程的，这个表示的是一个`Cluster`，通过这个接口可以实现创建连接池、获取`PrioritySet`、`ClusterInfo`等信息。
+    这个接口是真正暴露给worker线程的，这个表示的是一个`Cluster`，通过这个接口可以实现创建连接池、获取`PrioritySet`、`ClusterInfo`等信息。`ClusterEntry`实现了这个接口。
 
 * `Cluster`
 
     这个接口表示的就是一个真正的Cluster对象，包含了`Cluster`对象本身以及相关的`HealthChecker`、`Outlier::Detector`、`PrioritySet`。
     通过这个接口可以来初始化这个集群。初始化的过程其实就是根据对应集群的类型获取这个集群下的机器节点填充到`PrioritySet`中。
 
+* `LoadBalancer`
+
+    这个是Load Balancer的接口，用于从集群中根据配置的策略选择主机，
 
 ## 初始化过程
 
 1. 启动的时候，载入bootstrap配置，创建`ProdClusterManagerFactory`
 
-
-    ```C++
+    ```C++ hl_lines="5-9 15"
     void InstanceImpl::initialize(const Options& options,
                                   Network::Address::InstanceConstSharedPtr local_address,
                                   ComponentFactory& component_factory, ListenerHooks& hooks) {
@@ -53,10 +55,12 @@ hide:
     }
     ```
 
+    上面代码中的第15行会通过`ProdClusterManagerFactory`开始创建`ClusterManager`
+
 2. 通过`ProdClusterManagerFactory`的`clusterManagerFromProto`方法创建`ClusterManager`
 
 
-    ```C++
+    ```C++ hl_lines="3-5 13"
     ClusterManagerPtr ProdClusterManagerFactory::clusterManagerFromProto(
         const envoy::config::bootstrap::v3::Bootstrap& bootstrap) {
       return ClusterManagerPtr{new ClusterManagerImpl(
@@ -96,419 +100,217 @@ hide:
       };
     ```
 
-    开始载入primary集群
+    1. 开始载入primary集群
 
-    ```C++
-      // Build book-keeping for which clusters are primary. This is useful when we
-      // invoke loadCluster() below and it needs the complete set of primaries.
-      for (const auto& cluster : bootstrap.static_resources().clusters()) {
-        if (is_primary_cluster(cluster)) {
-          primary_clusters_.insert(cluster.name());
-        }
-      }
+        优先载入primary集群，因为Secondary集群的初始化可能会依赖primary集群，比如EDS类型的Cluster就需要依赖一个primary类型的xds集群来提供xds server的地址。
 
-    // Load all the primary clusters.
-      for (const auto& cluster : bootstrap.static_resources().clusters()) {
-        if (is_primary_cluster(cluster)) {
-          loadCluster(cluster, "", false, active_clusters_);
-        }
-      }
-    ```
-
-    开启创建adx通道，方便后续在这个通道上创建cds
-
-    ```C++
-      // Now setup ADS if needed, this might rely on a primary cluster.
-      // This is the only point where distinction between delta ADS and state-of-the-world ADS is made.
-      // After here, we just have a GrpcMux interface held in ads_mux_, which hides
-      // whether the backing implementation is delta or SotW.
-      if (dyn_resources.has_ads_config()) {
-        if (dyn_resources.ads_config().api_type() ==
-            envoy::config::core::v3::ApiConfigSource::DELTA_GRPC) {
-          ads_mux_ = std::make_shared<Config::NewGrpcMuxImpl>(
-              Config::Utility::factoryForGrpcApiConfigSource(*async_client_manager_,
-                                                            dyn_resources.ads_config(), stats, false)
-                  ->create(),
-              main_thread_dispatcher,
-              *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
-                  Config::Utility::getAndCheckTransportVersion(dyn_resources.ads_config()) ==
-                          envoy::config::core::v3::ApiVersion::V3
-                      // TODO(htuch): consolidate with type_to_endpoint.cc, once we sort out the future
-                      // direction of that module re: https://github.com/envoyproxy/envoy/issues/10650.
-                      ? "envoy.service.discovery.v3.AggregatedDiscoveryService.DeltaAggregatedResources"
-                      : "envoy.service.discovery.v2.AggregatedDiscoveryService."
-                        "DeltaAggregatedResources"),
-              Config::Utility::getAndCheckTransportVersion(dyn_resources.ads_config()), random_, stats_,
-              Envoy::Config::Utility::parseRateLimitSettings(dyn_resources.ads_config()), local_info);
-        } else {
-          ads_mux_ = std::make_shared<Config::GrpcMuxImpl>(
-              local_info,
-              Config::Utility::factoryForGrpcApiConfigSource(*async_client_manager_,
-                                                            dyn_resources.ads_config(), stats, false)
-                  ->create(),
-              main_thread_dispatcher,
-              *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
-                  Config::Utility::getAndCheckTransportVersion(dyn_resources.ads_config()) ==
-                          envoy::config::core::v3::ApiVersion::V3
-                      // TODO(htuch): consolidate with type_to_endpoint.cc, once we sort out the future
-                      // direction of that module re: https://github.com/envoyproxy/envoy/issues/10650.
-                      ? "envoy.service.discovery.v3.AggregatedDiscoveryService."
-                        "StreamAggregatedResources"
-                      : "envoy.service.discovery.v2.AggregatedDiscoveryService."
-                        "StreamAggregatedResources"),
-              Config::Utility::getAndCheckTransportVersion(dyn_resources.ads_config()), random_, stats_,
-              Envoy::Config::Utility::parseRateLimitSettings(dyn_resources.ads_config()),
-              bootstrap.dynamic_resources().ads_config().set_node_on_first_message_only());
-        }
-      } else {
-        ads_mux_ = std::make_unique<Config::NullGrpcMuxImpl>();
-      }
-    ```
-
-    开始载入静态的Secondary集群
-
-    ```C++
-      // After ADS is initialized, load EDS static clusters as EDS config may potentially need ADS.
-      for (const auto& cluster : bootstrap.static_resources().clusters()) {
-        // Now load all the secondary clusters.
-        if (cluster.type() == envoy::config::cluster::v3::Cluster::EDS &&
-            cluster.eds_cluster_config().eds_config().config_source_specifier_case() !=
-                envoy::config::core::v3::ConfigSource::ConfigSourceSpecifierCase::kPath) {
-          loadCluster(cluster, "", false, active_clusters_);
-        }
-      }
-    ```
-
-    创建LocalClusterParams，通过LocalClusterParams
-
-
-    ```C++
-      absl::optional<ThreadLocalClusterManagerImpl::LocalClusterParams> local_cluster_params;
-      if (local_cluster_name_) {
-        auto local_cluster = active_clusters_.find(local_cluster_name_.value());
-        if (local_cluster == active_clusters_.end()) {
-          throw EnvoyException(
-              fmt::format("local cluster '{}' must be defined", local_cluster_name_.value()));
-        }
-        local_cluster_params.emplace();
-        local_cluster_params->info_ = local_cluster->second->cluster().info();
-        local_cluster_params->load_balancer_factory_ = local_cluster->second->loadBalancerFactory();
-        local_cluster->second->setAddedOrUpdated();
-      }
-    ```
-
-
-    创建`ThreadLocalClusterManagerImpl`，这个结构是Thread Local的，可以安全的被work线程访问。
-
-    ```C++
-      // Once the initial set of static bootstrap clusters are created (including the local cluster),
-      // we can instantiate the thread local cluster manager.
-      tls_->set([this, local_cluster_name](
-                    Event::Dispatcher& dispatcher) -> ThreadLocal::ThreadLocalObjectSharedPtr {
-        return std::make_shared<ThreadLocalClusterManagerImpl>(*this, dispatcher, local_cluster_name);
-    ```
-
-
-    创建cds api
-
-    ```C++
-      // We can now potentially create the CDS API once the backing cluster exists.
-      if (dyn_resources.has_cds_config()) {
-        cds_api_ = factory_.createCds(dyn_resources.cds_config(), *this);
-        init_helper_.setCds(cds_api_.get());
-      } else {
-        init_helper_.setCds(nullptr);
-      }
-    ```
-
-
-    开始对所有集群进行初始化
-
-    ```C++
-      // Proceed to add all static bootstrap clusters to the init manager. This will immediately
-      // initialize any primary clusters. Post-init processing further initializes any thread
-      // aware load balancer and sets up the per-worker host set updates.
-      for (auto& cluster : active_clusters_) {
-        init_helper_.addCluster(*cluster.second);
-      }
-    ```
-
-
-3. thread local中更新集群，并创建LoadBalancer
-
-
-    ```C++
-      for (auto& cluster : parent.active_clusters_) {
-        // If local cluster name is set then we already initialized this cluster.
-        if (local_cluster_name && local_cluster_name.value() == cluster.first) {
-          continue;
-        }
-
-        ENVOY_LOG(debug, "adding TLS initial cluster {}", cluster.first);
-        ASSERT(thread_local_clusters_.count(cluster.first) == 0);
-        thread_local_clusters_[cluster.first] = std::make_unique<ClusterEntry>(
-            *this, cluster.second->cluster_->info(), cluster.second->loadBalancerFactory());
-      }
-    ```
-
-从主线程中获取所有的集群，然后创建ClusterEntry，然后更新到自己的Thread Local中，ClusterEntry中会创建LoadBalancer
-
-4. 静态集群初始化
-
-    ```C++
-
-
-      // Proceed to add all static bootstrap clusters to the init manager. This will immediately
-      // initialize any primary clusters. Post-init processing further initializes any thread
-      // aware load balancer and sets up the per-worker host set updates.
-      for (auto& cluster : active_clusters_) {
-        init_helper_.addCluster(*cluster.second->cluster_);
-      }
-
-
-    void ClusterManagerInitHelper::addCluster(Cluster& cluster) {
-      // See comments in ClusterManagerImpl::addOrUpdateCluster() for why this is only called during
-      // server initialization.
-      ASSERT(state_ != State::AllClustersInitialized);
-
-      const auto initialize_cb = [&cluster, this] { onClusterInit(cluster); };
-      if (cluster.initializePhase() == Cluster::InitializePhase::Primary) {
-        primary_init_clusters_.push_back(&cluster);
-        cluster.initialize(initialize_cb);
-      } else {
-        ASSERT(cluster.initializePhase() == Cluster::InitializePhase::Secondary);
-        secondary_init_clusters_.push_back(&cluster);
-        if (started_secondary_initialize_) {
-          // This can happen if we get a second CDS update that adds new clusters after we have
-          // already started secondary init. In this case, just immediately initialize.
-          cluster.initialize(initialize_cb);
-        }
-      }
-
-      ENVOY_LOG(debug, "cm init: adding: cluster={} primary={} secondary={}", cluster.info()->name(),
-                primary_init_clusters_.size(), secondary_init_clusters_.size());
-    }
-
-    void ClusterImplBase::initialize(std::function<void()> callback) {
-      ASSERT(!initialization_started_);
-      ASSERT(initialization_complete_callback_ == nullptr);
-      initialization_complete_callback_ = callback;
-      startPreInit();
-    }
-    ```
-
-    遍历所有的集群，然后调用initialize进行初始化，这个函数内部会调用每一个Cluster的`startPreInit`方法，用于做一些集群的前置初始化等。
-    例如: 对于DNS Cluster来说就是进行DNS解析，对于static Cluster来说就是添加host。
-
-    ```C++
-    void StrictDnsClusterImpl::startPreInit() {
-      for (const ResolveTargetPtr& target : resolve_targets_) {
-        target->startResolve();
-      }
-    }
-
-    void StaticClusterImpl::startPreInit() {
-      // At this point see if we have a health checker. If so, mark all the hosts unhealthy and
-      // then fire update callbacks to start the health checking process.
-      const auto& health_checker_flag =
-          health_checker_ != nullptr
-              ? absl::optional<Upstream::Host::HealthFlag>(Host::HealthFlag::FAILED_ACTIVE_HC)
-              : absl::nullopt;
-
-      auto& priority_state = priority_state_manager_->priorityState();
-      for (size_t i = 0; i < priority_state.size(); ++i) {
-        if (priority_state[i].first == nullptr) {
-          priority_state[i].first = std::make_unique<HostVector>();
-        }
-        priority_state_manager_->updateClusterPrioritySet(
-            i, std::move(priority_state[i].first), absl::nullopt, absl::nullopt, health_checker_flag,
-            overprovisioning_factor_);
-      }
-      priority_state_manager_.reset();
-
-      onPreInitComplete();
-    }
-    ```
-
-    初始化完成后，都会调用一个`onPreInitComplete`方法来表示前置初始化完毕(对于StrictDnsClusterImpl来说是等到host解析完毕或者失败，才会去调用onPreInitComplete)
-    所以`onPreInitComplete`的调用是一个异步的过程，只是对于static Cluster来说是立即执行的。
-
-    ```C++
-    void ClusterImplBase::onPreInitComplete() {
-      // Protect against multiple calls.
-      if (initialization_started_) {
-        return;
-      }
-      initialization_started_ = true;
-
-      ENVOY_LOG(debug, "initializing secondary cluster {} completed", info()->name());
-      init_manager_.initialize(init_watcher_);
-    }
-    ```
-
-    onPreInitComplete中调用`Init::ManagerImpl`进行初始化所有的target，最后调用init_watcher_的ReadFn
-
-    ```C++
-    init_watcher_("ClusterImplBase", [this]() { onInitDone(); })
-
-    void ClusterImplBase::onInitDone() {
-      if (health_checker_ && pending_initialize_health_checks_ == 0) {
-        for (auto& host_set : prioritySet().hostSetsPerPriority()) {
-          pending_initialize_health_checks_ += host_set->hosts().size();
-        }
-
-        // TODO(mattklein123): Remove this callback when done.
-        health_checker_->addHostCheckCompleteCb([this](HostSharedPtr, HealthTransition) -> void {
-          if (pending_initialize_health_checks_ > 0 && --pending_initialize_health_checks_ == 0) {
-            finishInitialization();
+        ```C++
+          // Build book-keeping for which clusters are primary. This is useful when we
+          // invoke loadCluster() below and it needs the complete set of primaries.
+          for (const auto& cluster : bootstrap.static_resources().clusters()) {
+            if (is_primary_cluster(cluster)) {
+              primary_clusters_.insert(cluster.name());
+            }
           }
-        });
-      }
 
-      if (pending_initialize_health_checks_ == 0) {
-        finishInitialization();
-      }
-    }
+        // Load all the primary clusters.
+          for (const auto& cluster : bootstrap.static_resources().clusters()) {
+            if (is_primary_cluster(cluster)) {
+              loadCluster(cluster, "", false, active_clusters_);
+            }
+          }
+        ```
 
-    ```
+    2. 开启创建adx通道，后续要在这个通道上创建cds api
 
-    然后调用`finishInitialization`
+        ```C++
+          // Now setup ADS if needed, this might rely on a primary cluster.
+          // This is the only point where distinction between delta ADS and state-of-the-world ADS is made.
+          // After here, we just have a GrpcMux interface held in ads_mux_, which hides
+          // whether the backing implementation is delta or SotW.
+          if (dyn_resources.has_ads_config()) {
+            if (dyn_resources.ads_config().api_type() ==
+                envoy::config::core::v3::ApiConfigSource::DELTA_GRPC) {
+              ads_mux_ = std::make_shared<Config::NewGrpcMuxImpl>(
+                  Config::Utility::factoryForGrpcApiConfigSource(*async_client_manager_,
+                                                                dyn_resources.ads_config(), stats, false)
+                      ->create(),
+                  main_thread_dispatcher,
+                  *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
+                      Config::Utility::getAndCheckTransportVersion(dyn_resources.ads_config()) ==
+                              envoy::config::core::v3::ApiVersion::V3
+                          // TODO(htuch): consolidate with type_to_endpoint.cc, once we sort out the future
+                          // direction of that module re: https://github.com/envoyproxy/envoy/issues/10650.
+                          ? "envoy.service.discovery.v3.AggregatedDiscoveryService.DeltaAggregatedResources"
+                          : "envoy.service.discovery.v2.AggregatedDiscoveryService."
+                            "DeltaAggregatedResources"),
+                  Config::Utility::getAndCheckTransportVersion(dyn_resources.ads_config()), random_, stats_,
+                  Envoy::Config::Utility::parseRateLimitSettings(dyn_resources.ads_config()), local_info);
+            } else {
+              ads_mux_ = std::make_shared<Config::GrpcMuxImpl>(
+                  local_info,
+                  Config::Utility::factoryForGrpcApiConfigSource(*async_client_manager_,
+                                                                dyn_resources.ads_config(), stats, false)
+                      ->create(),
+                  main_thread_dispatcher,
+                  *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
+                      Config::Utility::getAndCheckTransportVersion(dyn_resources.ads_config()) ==
+                              envoy::config::core::v3::ApiVersion::V3
+                          // TODO(htuch): consolidate with type_to_endpoint.cc, once we sort out the future
+                          // direction of that module re: https://github.com/envoyproxy/envoy/issues/10650.
+                          ? "envoy.service.discovery.v3.AggregatedDiscoveryService."
+                            "StreamAggregatedResources"
+                          : "envoy.service.discovery.v2.AggregatedDiscoveryService."
+                            "StreamAggregatedResources"),
+                  Config::Utility::getAndCheckTransportVersion(dyn_resources.ads_config()), random_, stats_,
+                  Envoy::Config::Utility::parseRateLimitSettings(dyn_resources.ads_config()),
+                  bootstrap.dynamic_resources().ads_config().set_node_on_first_message_only());
+            }
+          } else {
+            ads_mux_ = std::make_unique<Config::NullGrpcMuxImpl>();
+          }
+        ```
+
+    3. 开始载入静态的Secondary集群
+
+      基于文件的这种Secondary类型的Cluster是一个例外，可以不依赖任何Primary Clusetr就可以初始化，也不依赖xds，因此在这里归为Primary类型的Cluster优先初始化。
+
+        ```C++
+          // After ADS is initialized, load EDS static clusters as EDS config may potentially need ADS.
+          for (const auto& cluster : bootstrap.static_resources().clusters()) {
+            // Now load all the secondary clusters.
+            if (cluster.type() == envoy::config::cluster::v3::Cluster::EDS &&
+                cluster.eds_cluster_config().eds_config().config_source_specifier_case() !=
+                    envoy::config::core::v3::ConfigSource::ConfigSourceSpecifierCase::kPath) {
+              loadCluster(cluster, "", false, active_clusters_);
+            }
+          }
+        ```
+
+    4. 创建LocalClusterParams，通过LocalClusterParams
+
+        如果定义了local cluster会在这里进行初始化，local cluster目的为了做zone aware的load balancer。构建load balancer的时候需要用到。
+
+        ```C++
+          absl::optional<ThreadLocalClusterManagerImpl::LocalClusterParams> local_cluster_params;
+          if (local_cluster_name_) {
+            auto local_cluster = active_clusters_.find(local_cluster_name_.value());
+            if (local_cluster == active_clusters_.end()) {
+              throw EnvoyException(
+                  fmt::format("local cluster '{}' must be defined", local_cluster_name_.value()));
+            }
+            local_cluster_params.emplace();
+            local_cluster_params->info_ = local_cluster->second->cluster().info();
+            local_cluster_params->load_balancer_factory_ = local_cluster->second->loadBalancerFactory();
+            local_cluster->second->setAddedOrUpdated();
+          }
+        ```
+
+
+    5. 创建`ThreadLocalClusterManagerImpl`，这个结构是Thread Local的，可以安全的被work线程访问。
+
+        虽然我们有`ClusterManager`接口，但是这个接口是提供个主线程的，用来添加、更新、删除集群的，并非是线程安全的。而且我们在worker线程也不需要做集群的添加、更新和删除。
+        因此这里有了`ThreadLocalClusterManagerImpl`，他实现了`ThreadLocalCluster`接口，并提供了一些有限的一些接口提供给worker线程来访问我们的Cluster。
+
+        ```C++
+          // Once the initial set of static bootstrap clusters are created (including the local cluster),
+          // we can instantiate the thread local cluster manager.
+          tls_->set([this, local_cluster_name](
+                        Event::Dispatcher& dispatcher) -> ThreadLocal::ThreadLocalObjectSharedPtr {
+            return std::make_shared<ThreadLocalClusterManagerImpl>(*this, dispatcher, local_cluster_name);
+        ```
+
+
+    6. 创建cds api
+        
+        这里通过我们的`ClusterManagerFactory`创建cds api，在初始化Secondary Cluster的时候会用到cds api。
+
+        ```C++
+          // We can now potentially create the CDS API once the backing cluster exists.
+          if (dyn_resources.has_cds_config()) {
+            cds_api_ = factory_.createCds(dyn_resources.cds_config(), *this);
+            init_helper_.setCds(cds_api_.get());
+          } else {
+            init_helper_.setCds(nullptr);
+          }
+        ```
+
+
+    7. 开始对所有静态集群进行初始化
+
+        在最后遍历我们的所有Primary集群，对这些集群进行初始化。
+
+        ```C++
+          // Proceed to add all static bootstrap clusters to the init manager. This will immediately
+          // initialize any primary clusters. Post-init processing further initializes any thread
+          // aware load balancer and sets up the per-worker host set updates.
+          for (auto& cluster : active_clusters_) {
+            init_helper_.addCluster(*cluster.second);
+          }
+        ```
+
+4. Primary Cluster初始化完成后会进行RTDS的初始化
+
+    因为后续的其他组件在进行初始化的时候会依赖RTDS，因此需要先初始化RTDS
 
     ```C++
-
-    void ClusterImplBase::finishInitialization() {
-      ASSERT(initialization_complete_callback_ != nullptr);
-      ASSERT(initialization_started_);
-
-      // Snap a copy of the completion callback so that we can set it to nullptr to unblock
-      // reloadHealthyHosts(). See that function for more info on why we do this.
-      auto snapped_callback = initialization_complete_callback_;
-      initialization_complete_callback_ = nullptr;
-
-      if (health_checker_ != nullptr) {
-        reloadHealthyHosts(nullptr);
+      clusterManager().setPrimaryClustersInitializedCb(
+          [this]() { onClusterManagerPrimaryInitializationComplete(); });
+      void InstanceImpl::onClusterManagerPrimaryInitializationComplete() {
+        // If RTDS was not configured the `onRuntimeReady` callback is immediately invoked.
+        Runtime::LoaderSingleton::get().startRtdsSubscriptions([this]() { onRuntimeReady(); });
       }
+    ```
 
-      if (snapped_callback != nullptr) {
-        snapped_callback();
+5. RTDS初始化完成后开始进行Secondary Cluster的初始化
+    
+    在进行Secondary Cluster的时候会通过`maybeFinishInitialize`启动cds，然后等待`Secondary Cluster`完成初始化。
+    
+    !!! note
+        `maybeFinishInitialize`的初始化见下文具体分析
+
+    ```C++
+    void InstanceImpl::onRuntimeReady() {
+      // Begin initializing secondary clusters after RTDS configuration has been applied.
+      // Initializing can throw exceptions, so catch these.
+      try {
+        clusterManager().initializeSecondaryClusters(bootstrap_);
+      } catch (const EnvoyException& e) {
+        ENVOY_LOG(warn, "Skipping initialization of secondary cluster: {}", e.what());
+        shutdown();
+      }
+      ......
+    }
+
+    void ClusterManagerImpl::initializeSecondaryClusters(
+    const envoy::config::bootstrap::v3::Bootstrap& bootstrap) {
+      init_helper_.startInitializingSecondaryClusters();
+
+      const auto& cm_config = bootstrap.cluster_manager();
+      if (cm_config.has_load_stats_config()) {
+        const auto& load_stats_config = cm_config.load_stats_config();
+
+        load_stats_reporter_ = std::make_unique<LoadStatsReporter>(
+            local_info_, *this, stats_,
+            Config::Utility::factoryForGrpcApiConfigSource(*async_client_manager_, load_stats_config,
+                                                          stats_, false)
+                ->create(),
+            Config::Utility::getAndCheckTransportVersion(load_stats_config), dispatcher_);
       }
     }
     ```
-
-    然后调用`initialization_complete_callback_`也就是addCluster中的initialize_cb。
-
-    ```C++
-    const auto initialize_cb = [&cluster, this] { onClusterInit(cluster); };
-    ```
-
-
-    在这个函数中主要就是设置`addMemberUpdateCb`、`addPriorityUpdateCb`等 最后更新thread local
-
-    ```C++
-    void ClusterManagerImpl::onClusterInit(Cluster& cluster);
-
-      // Finally, if the cluster has any hosts, post updates cross-thread so the per-thread load
-      // balancers are ready.
-      for (auto& host_set : cluster.prioritySet().hostSetsPerPriority()) {
-        if (host_set->hosts().empty()) {
-          continue;
-        }
-        postThreadLocalClusterUpdate(cluster, host_set->priority(), host_set->hosts(), HostVector{});
-      }
-    ```
-
-
-    ```C++
-    void ClusterManagerImpl::postThreadLocalClusterUpdate(const Cluster& cluster, uint32_t priority,
-                                                          const HostVector& hosts_added,
-                                                          const HostVector& hosts_removed) {
-      const auto& host_set = cluster.prioritySet().hostSetsPerPriority()[priority];
-
-      tls_->runOnAllThreads([this, name = cluster.info()->name(), priority,
-                            update_params = HostSetImpl::updateHostsParams(*host_set),
-                            locality_weights = host_set->localityWeights(), hosts_added, hosts_removed,
-                            overprovisioning_factor = host_set->overprovisioningFactor()]() {
-        ThreadLocalClusterManagerImpl::updateClusterMembership(
-            name, priority, update_params, locality_weights, hosts_added, hosts_removed, *tls_,
-            overprovisioning_factor);
-      });
-    }
-
-    void ClusterManagerImpl::ThreadLocalClusterManagerImpl::updateClusterMembership(
-        const std::string& name, uint32_t priority, PrioritySet::UpdateHostsParams update_hosts_params,
-        LocalityWeightsConstSharedPtr locality_weights, const HostVector& hosts_added,
-        const HostVector& hosts_removed, ThreadLocal::Slot& tls, uint64_t overprovisioning_factor) {
-
-      ThreadLocalClusterManagerImpl& config = tls.getTyped<ThreadLocalClusterManagerImpl>();
-
-      ASSERT(config.thread_local_clusters_.find(name) != config.thread_local_clusters_.end());
-      const auto& cluster_entry = config.thread_local_clusters_[name];
-      ENVOY_LOG(debug, "membership update for TLS cluster {} added {} removed {}", name,
-                hosts_added.size(), hosts_removed.size());
-      cluster_entry->priority_set_.updateHosts(priority, std::move(update_hosts_params),
-                                              std::move(locality_weights), hosts_added, hosts_removed,
-                                              overprovisioning_factor);
-
-      // If an LB is thread aware, create a new worker local LB on membership changes.
-      if (cluster_entry->lb_factory_ != nullptr) {
-        ENVOY_LOG(debug, "re-creating local LB for TLS cluster {}", name);
-        cluster_entry->lb_ = cluster_entry->lb_factory_->create();
-      }
-    }
-    ```
-
-    最后完成所有的static集群的初始化工作
-
-    ```C++
-    void ClusterManagerInitHelper::onStaticLoadComplete() {
-      ASSERT(state_ == State::Loading);
-      state_ = State::WaitingForStaticInitialize;
-      maybeFinishInitialize();
-    }
-    ```
-
-
-    在`maybeFinishInitialize`中会进行secondary集群的初始化工作。
-
-    ```C++
-      started_secondary_initialize_ = false;
-      if (state_ == State::WaitingForStaticInitialize && cds_) {
-        ENVOY_LOG(info, "cm init: initializing cds");
-        state_ = State::WaitingForCdsInitialize;
-        cds_->initialize();
-      } else {
-        ENVOY_LOG(info, "cm init: all clusters initialized");
-        state_ = State::AllClustersInitialized;
-        if (initialized_callback_) {
-          initialized_callback_();
-        }
-      }
-
-    void ClusterManagerInitHelper::initializeSecondaryClusters() {
-      started_secondary_initialize_ = true;
-      // Cluster::initialize() method can modify the list of secondary_init_clusters_ to remove
-      // the item currently being initialized, so we eschew range-based-for and do this complicated
-      // dance to increment the iterator before calling initialize.
-      for (auto iter = secondary_init_clusters_.begin(); iter != secondary_init_clusters_.end();) {
-        Cluster* cluster = *iter;
-        ++iter;
-        ENVOY_LOG(debug, "initializing secondary cluster {}", cluster->info()->name());
-        cluster->initialize([cluster, this] { onClusterInit(*cluster); });
-      }
-    }
-    ```
-
 
 ## 核心方法和类分析
 
-无论是Primary cluster、还是Secondary Cluster，最终都是通过loadCluster把Cluster Protobuf变成Cluster对象。这两者的区别就是`added_via_api`，前者为false、后者为true。
-这个参数表明是否是通过API获取的。很明显Primary都不是通过API来获取的。
 
-```C++
-ClusterManagerImpl::loadCluster(const envoy::config::cluster::v3::Cluster& cluster,
-                                const std::string& version_info, bool added_via_api,
-                                ClusterMap& cluster_map)
-```
+!!! note 
+    无论是Primary cluster、还是Secondary Cluster，最终都是通过loadCluster把Cluster Protobuf变成Cluster对象。这两者的区别就是`added_via_api`，前者为false、后者为true。这个参数表明是否是通过API获取的。很明显Primary都不是通过API来获取的。
+
+    ```C++
+    ClusterManagerImpl::loadCluster(const envoy::config::cluster::v3::Cluster& cluster,
+                                    const std::string& version_info, bool added_via_api,
+                                    ClusterMap& cluster_map)
+    ```
 
 这个方法主要做了以下几件事:
 
@@ -613,13 +415,12 @@ ClusterManagerImpl::loadCluster(const envoy::config::cluster::v3::Cluster& clust
     ```
 
 
-Envoy的Cluster初始化是一个状态机、而且还是一个异步的过程，每一步的初始化需要等待初始化完成才能进行下一步的初始化，所以我们会看到
-代码中经常会去调用`maybeFinishInitialize`来判断当前是否完成了初始化，并进行状态机的更新。
+!!! note 
+    Envoy的Cluster初始化是一个状态机、而且还是一个异步的过程，每一步的初始化需要等待初始化完成才能进行下一步的初始化，所以我们会看到代码中经常会去调用`maybeFinishInitialize`来判断当前是否完成了初始化，并进行状态机的更新。
 
-
-```C++
-void ClusterManagerInitHelper::maybeFinishInitialize()
-```
+    ```C++
+    void ClusterManagerInitHelper::maybeFinishInitialize()
+    ```
 
 1. 如果还没有进行Primary Cluster等待载入以及在等待CdsApi初始化，则直接跳过。
 
@@ -873,13 +674,13 @@ void ClusterManagerInitHelper::maybeFinishInitialize()
 
     ```
 
+!!! note
+    每一个Cluster初始化完成后都会在其callback中调用这个方法进行Cluster额外的初始化。在这个初始化中会添加一些callback
+    最后触发thread local cluster的更新，以确保每一个thread都包含了最新的cluster内容了。
 
-每一个Cluster初始化完成后都会在其callback中调用这个方法进行Cluster额外的初始化。在这个初始化中会添加一些callback
-最后触发thread local cluster的更新，以确保每一个thread都包含了最新的cluster内容了。
-
-```C++
-void ClusterManagerImpl::onClusterInit(ClusterManagerCluster& cm_cluster);
-```
+    ```C++
+    void ClusterManagerImpl::onClusterInit(ClusterManagerCluster& cm_cluster);
+    ```
 
 1. 如果是一个warm cluster则会被转换成active cluster
 
@@ -996,12 +797,13 @@ void ClusterManagerImpl::onClusterInit(ClusterManagerCluster& cm_cluster);
     ```
 
 
-一个Cluster初始化完成或者更新后，需要更新所有的Thread Local中，让所有的Thread可以拿到最新的Cluster
+!!! note
+    一个Cluster初始化完成或者更新后，需要更新所有的Thread Local中，让所有的Thread可以拿到最新的Cluster
 
-```C++
-void ClusterManagerImpl::postThreadLocalClusterUpdate(ClusterManagerCluster& cm_cluster,
-                                                      ThreadLocalClusterUpdateParams&& params);
-```
+    ```C++
+    void ClusterManagerImpl::postThreadLocalClusterUpdate(ClusterManagerCluster& cm_cluster,
+                                                          ThreadLocalClusterUpdateParams&& params);
+    ```
 
 1. 设置集群的`AddedOrUpdated`位，表明已经更新了
 

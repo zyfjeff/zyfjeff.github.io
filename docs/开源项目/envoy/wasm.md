@@ -9,7 +9,7 @@
 
 Root Context和Context是WASM Filter中比较关键的两个对象，前者用于WASM实例之间的全局共享，而Context则是和Stream相关的一个Context贯穿整个请求的生命周期
 在这个请求之上的各个WASM实例可以共享这个Context，下面这张图是Wasm实例和Context之间的关系。
-
+git 
 ![image](./wasm_context.svg)
 
 

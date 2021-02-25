@@ -9,7 +9,8 @@ theme:
 markdown_extensions:
   - meta
   - attr_list
-  - pymdownx.highlight
+  - pymdownx.highlight:
+      linenums: true
   - pymdownx.superfences
   - pymdownx.inlinehilite
   - pymdownx.snippets
@@ -18,6 +19,8 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.keys
   - attr_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
 
 extra:
   social:
