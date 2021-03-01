@@ -1,9 +1,13 @@
-## Tip of the Week #103: Flags Are Globals
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #103: Flags Are Globals
 
 > by Matt Armstrong
 > Define flags at global scope in a .cc file. Declare them at most once in a corresponding .h file.
 
-### Why Declare Things In Header Files?
+## Why Declare Things In Header Files?
 
 使用头文件对于我们大多数人来说是一种反射，因此我们可能已经忘记了为什么使用它们:
 
@@ -12,7 +16,7 @@
 3. 头文件充当软件包公共API的文档。除了软件包的公共API外，不能使用其他任何形式。
 4. 包含头文件，而不是重新声明实体，可以帮助工具和人员进行依赖关系分析。
 
-### Abseil Flags Are As Vulnerable As Any Other Global
+## Abseil Flags Are As Vulnerable As Any Other Global
 
 您可以正确执行此操作，而不会出现链接时错误。首先，将以下内容放在`.cc`文件中：
 
@@ -30,7 +34,7 @@ extern absl::Flag<int64> FLAGS_my_flag;
 
 这个程序是存在问题的，发生的任何事情都是未定义行为的结果。在我的测试程序中，访问该标志时，此代码已编译、链接和奔溃了。
 
-### Recommendations
+## Recommendations
 
 与全局变量一样，使用命令行标志进行设计。
 
@@ -41,6 +45,6 @@ extern absl::Flag<int64> FLAGS_my_flag;
 5. 如果在多个文件中访问一个flag，则在与其定义相对应的一个.h文件中声明它。
 6. 使用`ABSL_FLAG(type, ...)`宏来定义flag
 
-### In Conclusion
+## In Conclusion
 
 Flag是全局变量，明智地使用它们。与使用其他任何全局变量一样，使用并声明它们。

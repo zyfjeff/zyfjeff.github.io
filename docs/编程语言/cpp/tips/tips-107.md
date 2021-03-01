@@ -1,4 +1,8 @@
-## Tip of the Week #107: Reference Lifetime Extension
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #107: Reference Lifetime Extension
 
 > Originally posted as totw/107 on 2015-12-10
 > By Titus Winters (titus@google.com)

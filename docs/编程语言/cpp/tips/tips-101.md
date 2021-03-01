@@ -1,4 +1,8 @@
-## Tip of the Week #101: Return Values, References, and Lifetimes
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #101: Return Values, References, and Lifetimes
 
 > Originally posted as totw/101 on 2015-07-29
 > By Titus Winters (titus@google.com)

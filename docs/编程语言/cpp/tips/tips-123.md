@@ -1,9 +1,13 @@
-## Tip of the Week #123: absl::optional and std::unique_ptr
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #123: absl::optional and std::unique_ptr
 
 > Originally posted as totw/123 on 2016-09-06
 > By Alexey Sokolov (sokolov@google.com) and Etienne Dechamps (edechamps@google.com)
 
-### How to Store Values
+## How to Store Values
 
 本Tips讨论了几种存储值的方法。这里我们以类成员变量为例，但是以下许多要点也适用于局部变量。
 
@@ -21,7 +25,7 @@ class Foo {
 };
 ```
 
-#### As a Bare Object
+### As a Bare Object
 
 这是最简单的方法。 `val_`分别在`Foo`的构造函数和`Foo`的析构函数中进行构造和销毁的。如果`Bar`具有默认构造函数，甚至无需显式初始化。
 `val`_非常安全，因为其值不能为`null`。这样可以消除一类潜在的错误。
@@ -33,7 +37,7 @@ class Foo {
 
 * 需要传递给`Bar`构造函数的任何参数都必须在`Foo`的构造函数的初始化列表中进行计算，如果涉及复杂的表达式，则可能会很困难。
 
-#### As absl::optional<Bar>
+### As absl::optional<Bar>
 
 这是裸露对象的简单性与`std::unique_ptr`的灵活性之间结合体，该对象存储在`Foo`中，但是与裸对象不同，`absl::optional`可以为空。
 可以随时通过赋值`(opt_ = ...)`或通过原地构造对象`(opt_.emplace（...))`来填充它。由于对象是内联存储的，因此有关在栈上分配大对象的常见警告也适用于`absl::optional`
@@ -44,7 +48,7 @@ class Foo {
 * 对于读者来说，对象构造和析构发生的地方不太明显。
 * 存在访问不存在的对象的风险
 
-#### As std::unique_ptr<Bar>
+### As std::unique_ptr<Bar>
 
 这是最灵活的方式。该对象存储在`Foo`外部。就像`absl::optional`一样，`std::unique_ptr`可以为空，但是,与`absl::optional`不同的是，
 可以将对象的所有权转移到别的对象上(通过一个移动操作),或者从别的对象获取所有权(构造或通过赋值)时,或者假设从一个原始指针获取所有权(构造或通过`ptr_ = absl::WrapUnique(…)`)
@@ -66,7 +70,7 @@ class Foo {
 
 * 即使`Bar`是可以复制的，但是`std::unique_ptr<Bar>`仍然是不可复制的， 这导致`Foo`也不能被复制。
 
-### Conclusion
+## Conclusion
 
 与往常一样，努力避免不必要的复杂性，并使用最简单的方法。如果适合您的情况，则最好选择裸露的对象。否则，请尝试`absl::optional`。作为最后的选择，请使用`std::unique_ptr`。
 

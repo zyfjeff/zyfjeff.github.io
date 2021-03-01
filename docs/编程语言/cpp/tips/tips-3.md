@@ -1,4 +1,8 @@
-## Tip of the Week #3: String Concatenation and operator+ vs. StrCat()
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #3: String Concatenation and operator+ vs. StrCat()
 
 > Originally published as totw/3 on 2012-05-11
 > Updated 2017-09-18; revised 2018-01-22

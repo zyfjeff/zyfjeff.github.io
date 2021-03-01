@@ -1,4 +1,8 @@
-## Tip of the Week #126: `make_unique` is the new `new`
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #126: `make_unique` is the new `new`
 
 > Originally posted as totw/126 on 2016-12-12
 > By James Dennett (jdennett@google.com) based on a mailing list post by Titus Winters (titus@google.com)
@@ -14,16 +18,16 @@
 两个关键工具，一个是`absl::make_unique`(在`C++11`时代实现了C++14中的`std::make_unique`，提供了一个无泄漏版本的内存分配)。
 另外一个工具是`absl::WrapUnique`(用于将具有所有权的裸指针包装成`std::unique_ptr`类型)，他的实现可以在`absl/memory/memory.h`中发现。
 
-### Why Avoid new?
+## Why Avoid new?
 
 为什么在代码中应该优先使用智能指针代替通过new来分配的裸指针。
 
 1. 如果可能的化，在类型系统中所有权是最好的表达。他允许
 
 
-### How Should We Choose Which to Use?
+## How Should We Choose Which to Use?
 
-### Summary
+## Summary
 
 `absl::make_unique`和`absl::WrapUnique`相比，优先使用`absl::make_unique`，而`absl::WrapUnique`和`new`相比，优先使用`absl::WrapUnique`
 

@@ -1,4 +1,8 @@
-## Tip of the Week #117: Copy Elision and Pass-by-value
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #117: Copy Elision and Pass-by-value
 
 > Originally posted as TotW #117 on June 8, 2016
 > by Geoff Romer, (gromer@google.com)
@@ -46,7 +50,7 @@ Widget widget(absl::StrCat(bar, baz));
 能够使用`Copy elision`技术的前提是`name`参数的类型必须是能够被拷贝的。确实，此技术的本质是尝试使复制操作发生在可以消除复制函数的函数调用边界上，而不是在函数内部进行。
 这不必涉及`std::move()`;。
 
-### When to Use Copy Elision
+## When to Use Copy Elision
 
 通过值传递参数有几个缺点，应该牢记。第一它使函数主体更加复杂，从而造成维护和可读性负担，例如在上面的代码中，我们添加了一个`std::move`调用，这可能会导致意外访问已经被移动的值的风险，
 在上面的函数中，风险很小，但如果函数更复杂，则风险会更高。第二它有时会以令人惊讶的方式降低性能。如果不分析特定的工作负载，有时可能很难说出为什么。

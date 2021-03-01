@@ -1,4 +1,8 @@
-## Item40 Use std::atomic for concurrency, volatile for specific memory
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Item40 Use std::atomic for concurrency, volatile for specific memory
 
 &emsp; &emsp;**volatile**关键字在C++中很少被使用，更准确来说是很少被正确使用，它的用途令人很迷惑，甚至这个关键字都不会出现在并发章节。因为这个关键字对于并发编程来说没有任何用处，但是在其他编程语言中这个关键字的用途却很大，因此很值得在本文去探讨一下**volatile**关键字，排除读者们对**volatile**关键字的困扰。
 

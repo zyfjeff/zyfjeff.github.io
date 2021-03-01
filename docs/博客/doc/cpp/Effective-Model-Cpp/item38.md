@@ -1,4 +1,9 @@
-## Item38 Be aware of varying thread handle destructor behavior
+---
+hide:
+  - toc        # Hide table of contents
+---
+
+# Item38 Be aware of varying thread handle destructor behavior
 
 &emsp; &emsp;在[Item37](http://blog.csdn.net/zhangyifei216/article/details/70187289)中解释过一个状态为**joinable**的**std::thread**对象其底层对应一个系统线程。**std::future**对象和**std::thread**比较类似，一个**future**对象也对应着一个系统线程。尽管如此这两者在析构的时候其行为也是不一样的。在[Item37](http://blog.csdn.net/zhangyifei216/article/details/70187289)中已经提到过一个**joinable**状态的**std::thread**对象在析构的时候会导致程序**terminate**，这是因为无论是调用**join**还是**detach**都是一个糟糕的行为，这个在[Item37](http://blog.csdn.net/zhangyifei216/article/details/70187289)中已经进行了解释。而本文所说的**std::future**对象，它的析构有的时候类似于隐式调用**join**，有的时候则是类似于隐式调用**detach**，甚至两者都不是，但是**std::future**不会导致程序**terminate**。
 

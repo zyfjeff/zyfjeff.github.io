@@ -1,4 +1,8 @@
-## Tip of the Week #11: Return Policy
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #11: Return Policy
 
 > Originally posted as TotW #11 on August 16, 2012
 > by Paul S. R. Chisholm (p.s.r.chisholm@google.com)

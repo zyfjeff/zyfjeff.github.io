@@ -1,4 +1,8 @@
-## Tip of the Week #93: using absl::Span
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #93: using absl::Span
 
 > Originally posted as TotW #93 on April 23, 2015
 > by Samuel Benzaquen (sbenza@google.com)

@@ -1,4 +1,8 @@
-## Tip of the Week #42: Prefer Factory Functions to Initializer Methods
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #42: Prefer Factory Functions to Initializer Methods
 
 > Originally posted as totw/42 on 2013-05-10
 > By Geoffrey Romer [(gromer@google.com)](mailto:gromer@google.com)

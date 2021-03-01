@@ -1,4 +1,8 @@
-## Tip of the Week #94: Callsite Readability and bool Parameters
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #94: Callsite Readability and bool Parameters
 
 > Originally posted as totw/94 on 2015-04-27
 > By Geoff Romer (gromer@google.com)

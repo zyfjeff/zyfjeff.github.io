@@ -1,4 +1,8 @@
-## Tip of the Week #109: Meaningful `const` in Function Declarations
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #109: Meaningful `const` in Function Declarations
 
 > Originally posted as totw/109 on 2016-01-14
 > By Greg Miller (jgm@google.com)
@@ -22,7 +26,7 @@ void F(const int) { /* ... */ }  // 4: error: re-definition of F(int)
 
 尽管第三行和第四行都是相同函数的定义，但是他们的实现确实不同的，这取决于他们的声明方式。第三行的函数参数是`int`(非`const`)，第四行的函数参数是`const int`。
 
-### Meaningful const in Function Declarations
+## Meaningful const in Function Declarations
 
 函数声明中并不是所有的const限制符都可以忽略，引用自`C++`标准中的 "Overloadable声明"（[over.load])。
 
@@ -30,4 +34,4 @@ void F(const int) { /* ... */ }  // 4: error: re-definition of F(int)
 
 
 
-### Rules of Thumb
+## Rules of Thumb

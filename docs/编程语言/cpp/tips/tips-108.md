@@ -1,4 +1,8 @@
-## Tip of the Week #108: Avoid std::bind
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #108: Avoid std::bind
 
 > Originally published as totw/108 on 2016-01-07
 > By Roman Perepelitsa (roman.perepelitsa@gmail.com)
@@ -6,7 +10,7 @@
 
 > Quicklink: abseil.io/tips/108
 
-### Avoid std::bind
+## Avoid std::bind
 
 这个Tips总结了在写代码的时候为什么要远离`std::bind`。
 
@@ -145,10 +149,10 @@ absl::bind_front(&MyClass::OnDone, this)
 
 这些高级用途可能会`std::bind`占有一席之地。在使用它们之前，请考虑`std::bind`的所有已知问题，并问自己是否值得节省一些字符或代码行。
 
-### Conclusion
+## Conclusion
 
 避免使用`std::bind`，使用`lambda`或者`absl::bind_front`来代替。
 
-### Further Reading
+## Further Reading
 
 '’Effective Modern C++’’, Item 34: Prefer lambdas to std::bind.

@@ -1,4 +1,8 @@
-## Tip of the Week #86: Enumerating with Class
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #86: Enumerating with Class
 
 > Originally posted as totw/86 on 2015-01-05
 > By Bradley White (bww@google.com)

@@ -1,4 +1,77 @@
-# C++17
+---
+hide:
+  - toc        # Hide table of contents
+---
+# C++17 In Details
+
+## New auto rules for direct-list-initialisation
+
+下面这段代码在C++17之前会被推倒成`std::initializer_list<int>`，在C++17后会被推导成int
+
+```C++
+auto x {1};
+```
+
+上面这种代码初始化方式被称为直接初始化，如果改成Copy Initialisation的话就会被推导成`std::initializer_list<int>`
+
+```C++
+auto x = {1};
+```
+
+下面是一些类型推导的示例:
+
+
+```C++
+auto x1 = { 1, 2 };   // decltype(x1) is std::initializer_list<int> 
+auto x2 = { 1, 2.0 }; // error: cannot deduce element type
+auto x3{ 1, 2 };      // error: not a single element
+auto x4 = { 3 };      // decltype(x4) is std::initializer_list<int>
+auto x5{ 3 };         // decltype(x5) is int
+```
+
+可以看出来，直接初始化的方式是不能被推导成`std::initializer_list`的，只能放1个元素。
+
+## static_assert With no Message
+
+C++17之前static_assert是必须要带上message的，C++17后这个已经不是必须的了，模拟了编译时的assert。
+
+```C++
+static_assert(std::is_arithmetic_v<T>, "T must be arithmetic");
+static_assert(std::is_arithmetic_v<T>); // no message needed since C++17
+```
+
+## Different begin and end Types in Range-Based For Loop
+
+
+C++17之前`for range`的实现大致如下：
+
+```C++
+{
+
+  auto && __range = for-range-initializer;
+  for ( auto __begin = begin-expr, __end = end-expr; __begin != __end; ++__begin ) { 
+    for-range-declaration = *__begin; 
+    statement
+  }
+}
+```
+
+上面的实现要求`__begin`和`__end`必须是相同类型的， 但是到了C++17后， `for range`的实现如下:
+
+
+```C++
+{
+  auto && __range = for-range-initializer; 
+  auto __begin = begin-expr;
+  auto __end = end-expr;
+  for ( ; __begin != __end; ++__begin ) {
+    for-range-declaration = *__begin;
+    statement 
+  }
+}
+```
+
+可以看出在C++17后已经不再要求`__begin`、`__end`是相同类型了，只需要`__begin`和`__end`支持比较操作即可。
 
 ## Stricter Expression Evaluation Order
 
@@ -53,10 +126,8 @@ addInt: 8
 ```
 
 
-`C++17`之前对于形如`A(B(), C());`这种形式的调用，对于`B()`和`C()`的执行顺序是不确定的，所以为了保证内存安全，才有了`std::make_unique`这样的语法糖。
-
-例如下面这段代码，如果先执行`new T`，然后执行`otherFunction`，这个时候如果抛出异常会导致内存泄漏，但是C++17后，可以保证new T执行完后，再执行`unique_ptr<T>`的构造，
-最后才执行`otherFunction`，这样就可以保证内存安全了。
+`C++17`之前对于形如`A(B(), C());`这种形式的调用，对于`B()`和`C()`的执行顺序是不确定的，所以为了保证内存安全，才有了`std::make_unique`这样的语法糖。例如下面这段代码，如果先执行`new T`，然后执行`otherFunction`，
+这个时候如果抛出异常会导致内存泄漏，但是C++17后，可以保证new T执行完后，再执行`unique_ptr<T>`的构造，最后才执行`otherFunction`，这样就可以保证内存安全了。
 
 ```C++
 foo(unique_ptr<T>(new T), otherFunction());
@@ -64,13 +135,13 @@ foo(unique_ptr<T>(new T), otherFunction());
 
 C++17后对于表达式的执行顺序可以进行如下的保障。
 
-  1. a.b
-  2. a->b
-  3. a->*b
-  4. a(b1, b2, b3) // b1, b2, b3 - in any order 5. b @= a // '@' means any operator
-  6. a[b]
-  7. a << b
-  8. a >> b
+  * `a.b`
+  * `a->b`
+  * `a->*b`
+  * `a(b1, b2, b3)` // b1, b2, b3 - in any order 5. b @= a // '@' means any operator
+  * `a[b]`
+  * `a << b`
+  * `a >> b`
 
 
 ## Guaranteed Copy Elision
@@ -101,8 +172,11 @@ int main() {
   auto largeNonMoveableObj = make(90);
   return largeNonMoveableObj.v;
 }
+```
 
+上面的代码在C++17之前会编译失败，错误如下:
 
+```C++
 // 编译错误
 
 copy_elision_non_moveable.cc:15:10: error: call to deleted constructor of 'NonMoveable'
@@ -124,10 +198,7 @@ copy_elision_non_moveable.cc:8:3: note: 'NonMoveable' has been explicitly marked
   NonMoveable(NonMoveable&&) = delete;
 ```
 
-C++17后上面的代码就可以编译了，会保证强制执行执行RVO优化(两种case下会保证)，所以可以直接原地构造。但是这一切的保证只适用于RVO，而不是NRVO。
-
-* 形如`Type t = T()`从一个右值来初始化一个对象
-* 函数返回的一个右值来初始化对象`Type t = functioncall()`
+C++17后上面的代码就可以编译了，会保证强制执行执行RVO优化，所以可以直接原地构造。但是这一切的保证只适用于RVO，而不是NRVO。
 
 
 ## Updated Value Categories
@@ -139,7 +210,15 @@ C++98/03的时候对于值的类型分为两类:
 
 C++11后，则分为五类:
 
-* lvalue
+![value_category](img/value_category.jpg)
+
+* lvalue 一个可以取地址的表达式
+
+```C++
+class X { int a; };
+X x;  // x是一个左值，可以取地址的。
+```
+
 * glvalue
 * xvalue  通过右值引用产生的右值，其实又是左值
 
@@ -155,10 +234,10 @@ void forward_value(int&& i) {
 }
 
 int main() {
- int a = 0;
- process_value(a);
- process_value(1);
- forward_value(2);
+  int a = 0;
+  process_value(a);
+  process_value(1);
+  forward_value(2);
 }
 
 // 输出结果:
@@ -168,7 +247,12 @@ LValue processed: 2
 ```
 
 * rvalue
-* prvalue
+* prvalue 没有名字，无法取地址，可以通过move到一个表达式中。
+
+```C++
+class X { int a; };
+X{10} // 这是一个纯右值
+```
 
 
 xvalue和lvalue 属于 glvalue

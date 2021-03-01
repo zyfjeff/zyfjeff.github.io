@@ -1,4 +1,8 @@
-## Tip of the Week #88: Initialization: =, (), and {}
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #88: Initialization: =, (), and {}
 
 > Originally posted as TotW #88 on Jan 27, 2015
 > by Titus Winters (titus@google.com), on behalf of the Google C++ Style Arbiters

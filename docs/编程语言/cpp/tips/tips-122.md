@@ -1,4 +1,8 @@
-## Tip of the Week #122: Test Fixtures, Clarity, and Dataflow
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #122: Test Fixtures, Clarity, and Dataflow
 
 > Originally published as totw/122 on 2016-08-30
 > By Titus Winters (titus@google.com)
@@ -11,7 +15,7 @@
 
 另一方面，如果您使每个测试都尽可能简单明了，则通过检查，理解其逻辑并检查更高质量的测试逻辑将更容易发现它是正确的。让我们看一些实现该目标的简单方法。
 
-### Dataflow in Fixtures
+## Dataflow in Fixtures
 
 考虑下面的例子:
 
@@ -73,7 +77,7 @@ TEST(FrobberTest, CalculatesB) {
 
 采用这种风格，即使在一个拥有数百个测试的世界中，我们也能通过本地信息准确地知道发生了什么。
 
-### Prefer Free Functions
+## Prefer Free Functions
 
 在前面的示例中，所有变量初始化都很简洁，在实际测试中，情况并非总是如此。但是，关于数据流和避免固定装置的相同想法可能适用。考虑以下protobuf示例：
 
@@ -134,7 +138,7 @@ TEST(BobberTest, UsesProtos) {
 
 将初始化移到普通函数中可以清楚地表明没有隐藏的数据流。精心选择的helper名称意味着您可能甚至无需向上查看代码即可确认测试的正确性，甚至无需查看helper方法的具体实现细节。
 
-### Five Easy Steps
+## Five Easy Steps
 
 通常，您可以按照以下步骤提高测试的可读性:
 

@@ -1,4 +1,8 @@
-## Tip of the Week #55: Name Counting and unique_ptr
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #55: Name Counting and unique_ptr
 
 > Originally published as totw/55 on 2013-09-12
 >

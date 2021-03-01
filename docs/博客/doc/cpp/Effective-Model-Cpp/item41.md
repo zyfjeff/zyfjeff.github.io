@@ -1,4 +1,8 @@
-## Item41 Consider pass by value for copyable parameters that are cheap to move and always copied.
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Item41 Consider pass by value for copyable parameters that are cheap to move and always copied.
 
 &emsp; &emsp;函数的参数传递方式有很多种，可以是值拷贝、传指针、传引用、甚至是移动。下面这个addName函数就是将外部传入的值存放到其内部的一个私有的容器中，为了让传递的过程更加高效，addName同时支持引用传递和移动两种方式。
 

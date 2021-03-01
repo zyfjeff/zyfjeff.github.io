@@ -1,4 +1,8 @@
-## Item42 Consider emplacement instead of insertion
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Item42 Consider emplacement instead of insertion
 
 &emsp; &emsp;如果你有一个容器，存放的是`std::string`类型，当你通过插入函数(如:` insert`、`push_front`、`push_back`或者是`std::forward_list`的`insert_after`)传递一个`std::string`类型的元素到容器中，逻辑上容器中就会有这个元素了。尽管这可能只是逻辑上的，但并不总是真的，考虑下面这段代码：
 

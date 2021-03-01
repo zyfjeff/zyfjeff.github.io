@@ -1,8 +1,13 @@
-### 背景
+---
+hide:
+  - toc        # Hide table of contents
+---
+# 如何mock系统调用
+## 背景
 
 ​&emsp; &emsp;Linux下开发存储系统、网络库的时候会用到一系列Linux的系统调用，每一个系统调用都有一些出错的场景，有些场景很极端，比如内存使用达到上限、磁盘写满等，如果对其进行测试的话，很难去构造这样的一个场景，这个时候集成测试就显得力不存心了，只能靠单元测试来覆盖这些场景。现在的问题就是如何去mock这些系统调用，然后通过程序返回对应场景的错误码来模拟各种场景。也就是将对系统函数的依赖注入到程序中。
 
-### 系统函数的依赖注入
+## 系统函数的依赖注入
 
 ​&emsp; &emsp;目前实现系统函数的依赖注入的手段有很多，分为编译期注入，和运行期注入，至于什么是依赖注入可以参考知乎的一篇文章[如何用最简单的方式解释依赖注入](https://www.zhihu.com/question/32108444)，下面介绍几种依赖注入的方法:
 
@@ -10,7 +15,7 @@
 
 ​&emsp; &emsp;使用传统的面向对象的手法，借助运行期的延迟绑定实现注入和替换，自己实现一个System接口类，把程序用到的系统调用都用虚函数封装一层，然后在调用的时候不直接调用系统调用，而是调用的System对应的方法。这样代码的主动权就交给了System接口类了。写单元测试的时候将这个System接口类替换成我们自己的mock对象就可以。完整的示例代码如下:
 
-```
+```C++
   // system.h
   class System {
    public:
@@ -135,7 +140,7 @@
 
 ​&emsp; &emsp;创建一个命名空间，创建一系列和系统调用同名的方法，间接的调用系统调用，写测试代码的时候重新定义这些方法，这就相当于一份代码有了两份实现，根据编译的时候链接哪份代码来决定是否启用mock，这个看起来要比基于虚函数的要简单的多了。完整的示例代码如下:
 
-```
+```C++
   // file_ops.h
   namespace FileOps {
     int  open(const char *path, int oflag, ...);
@@ -206,7 +211,7 @@
 
 
 
-### 链接期垫片(link seam)
+## 链接期垫片(link seam)
 
 ​&emsp; &emsp;连接器垫片的方式一般情况有三种，如下:
 
@@ -216,7 +221,7 @@
 
 ​&emsp; &emsp;第一种就是通过链接顺序来改变链接的对象，将要mock的对象重新实现一遍，链接的时候链接器会优先使用我们自己实现的同名函数，这样就可以将目标替换为要mock的对象了，完整代码如下:
 
-```
+```C++
 //  一个待测试的对象
 int main() {
   int fd = ::open("txt", O_RDWR|O_CREAT, 0777);
@@ -248,7 +253,7 @@ extern "C" ssize_t write(int fildes, const void *buf, size_t nbyte) {
 
 ​&emsp; &emsp;另外一种就是Linux下独有的，通过gcc的--wrap选项可以指定要wrap的系统调用，那么相应的就回去调用带有`__wrap`前缀的对应系统调用实现，比如--wrap=write，那么在链接的时候就会链接到 `__wrap_write`，而真实的write调用变成了`__real_write`。完整代码例子如下:
 
-```
+```C++
 // 测试程序
 int main() {
   int fd = ::open("txt", O_RDWR|O_CREAT, 0777);
@@ -276,7 +281,7 @@ extern "C" ssize_t __wrap_write(int fildes, const void *buf, size_t nbyte) {
 
 
 
-### 附录
+## 附录
 
 * 本文所有代码见[github](https://github.com/zyfjeff/mock.git)
 * [Advice on Mocking System Calls](https://stackoverflow.com/questions/2924440/advice-on-mocking-system-calls)

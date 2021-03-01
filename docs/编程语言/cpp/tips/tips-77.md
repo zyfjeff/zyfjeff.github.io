@@ -1,4 +1,8 @@
-## Tip of the Week #77: Temporaries, Moves, and Copies
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #77: Temporaries, Moves, and Copies
 
 > Originally published as totw/77 on 2014-07-09
 > By Titus Winters (titus@google.com)

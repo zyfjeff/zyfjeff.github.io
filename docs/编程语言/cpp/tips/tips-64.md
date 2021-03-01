@@ -1,4 +1,8 @@
-## Tip of the Week #64: Raw String Literals
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #64: Raw String Literals
 > Originally published as totw/64 on 2013-12-09
 > By Titus Winters (titus@google.com)
 > Updated 2017-10-23
@@ -10,7 +14,7 @@
 
 幸运的是，有一个新的C++11的特性`raw string literals`，它消除了转义的需要。
 
-### The Raw String Literal Format
+## The Raw String Literal Format
 一个`raw string literals`具有如下的语法格式:
 
 ```cpp
@@ -34,7 +38,7 @@ const char concert_17_raw[] = R"(
     price_usd: 200)";
 ```
 
-### Special Cases
+## Special Cases
 注意锁进规则，当遇到`raw string literals`可能会包含新行的情况，会让你面临如何对原始字符串的第一行进行锁进的尴尬的选择。因为`protobuf`的文本是忽略空白的，所以可以通过添加一个前导`\n`来避免这个问题，但是不是所有的原始字符串的使用都如此宽容。
 
 当遇到原始字符串中包含`)"`的时候会导致不能将`)`作为结束的分割符，这个时候一个非空的`tag`会很有用：
@@ -43,7 +47,7 @@ const char concert_17_raw[] = R"(
 std::string my_string = R"foo(This contains quoted parens "()")foo";
 ```
 
-### Conclusion
+## Conclusion
 
 `raw string literals`肯定不是我们大多数人的日常工具，但是有的时候善用这种新的语言功能会增加代码的可读性。因此下次当您试图搞清楚是否需要`\\`或者`\\\\`的时候，请尝试使用`raw string literal`替换。你的读者会感谢你，即使这样，正则表达式仍然很难。
 

@@ -1,4 +1,8 @@
-## Tip of the Week #120: Return Values are Untouchable
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #120: Return Values are Untouchable
 
 > Originally posted as TotW #120 on August 16, 2012
 > by Samuel Benzaquen, (sbenza@google.com)
@@ -25,14 +29,14 @@ MyStatus DoSomething() {
 
 到底怎么回事?
 
-### Summary
+## Summary
 
 return语句运行后，切勿访问（读或写）函数的返回变量，除非您非常小心地正确执行此操作，否则行为是不确定的。
 返回变量在复制或移动后被析构函数隐式访问（请参见C ++ 11标准[stmt.return]第6.6.3节），这是这种意外访问的发生方式，但复制/移动可能被忽略。 这就是行为未定义的原因。
 
 本Tips仅在返回非引用局部变量时适用。返回任何其他表达式都不会触发此问题。
 
-### The Problem
+## The Problem
 
 对于return语句，有两种不同的优化可以修改我们原始代码段的行为：NRVO（请参见[TotW#11](https://abseil.io/tips/11)）和隐式移动。
 之前的代码起作用了，因为正在进行copy elision，并且return语句实际上没有做任何工作，变量status已经在返回地址中构造，并且清除对象在return语句之后看到MyStatus对象的唯一实例就是status。
@@ -42,7 +46,7 @@ return语句运行后，切勿访问（读或写）函数的返回变量，除�
 毕竟，copy elision是一个可选的优化，编译器选项或编译器实现的质量会影响是否发生这种情况。
 
 
-### Solution
+## Solution
 
 不要在return语句后访问return的变量。注意局部变量的析构函数可能会隐式地访问return的变量。
 最简单的解决方案是将功能一分为二。一个负责所有处理工作，一个调用第一个并进行事后处理（即登录错误）。例如：
@@ -88,7 +92,7 @@ MyStatus DoSomething() {
 }
 ```
 
-### Another example
+## Another example
 
 ```cpp
 std::string EncodeVarInt(int i) {
@@ -120,7 +124,7 @@ std::string EncodeVarInt(int i) {
 }
 ```
 
-### Conclusion
+## Conclusion
 
 不要对将要返回的局部变量持有引用。
 

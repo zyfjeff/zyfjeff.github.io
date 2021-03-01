@@ -1,4 +1,8 @@
-## Tip of the Week #90: Retired Flags
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #90: Retired Flags
 
 > Originally posted as TotW #90 on March 19, 2015
 > *by Titus Winters

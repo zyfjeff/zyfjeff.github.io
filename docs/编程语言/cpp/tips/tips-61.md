@@ -1,9 +1,13 @@
-## Tip of the Week #61: Default Member Initializers
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #61: Default Member Initializers
 > Originally posted as Totw #61 on Nov 12, 2013
 > by Michael Chastain (mec.desktop@gmail.com)
 > Updated October, 2016
 
-### Declaring Default Member Initialization
+## Declaring Default Member Initialization
 一个默认的成员初始化声明是用于给成员在构造的时候提供一个默认值，看起来像下面这段代码:
 
 ```cpp
@@ -26,7 +30,7 @@ struct Options {
 };
 ```
 
-### Member Initialization Overrides
+## Member Initialization Overrides
 如果对一个已经有默认初始化值的数据成员在构造函数中再次进行了初始化，那么构造函数中的默认值将会覆盖默认的成员初始化值。
 
 ```cpp
@@ -67,7 +71,7 @@ class Frobber {
 
 > 注意，一些来的文档可能将默认成员初始化称为非静态数据成员初始化，简写为NSDMIs.
 
-### Conclusion
+## Conclusion
 默认的成员初始化不会让你的程序变的更快，它只会帮助你减少因为遗漏导致的bug，尤其是当有人添加新的构造函数或新的数据成员时。
 
 主要不要将非静态的类成员初始化与静态的类成员初始化混淆。

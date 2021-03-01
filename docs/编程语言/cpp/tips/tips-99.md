@@ -1,4 +1,8 @@
-## Tip of the Week #99: Nonmember Interface Etiquette
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #99: Nonmember Interface Etiquette
 
 > Originally posted as totw/99 on 2015-06-24
 > Revised 2017-10-10

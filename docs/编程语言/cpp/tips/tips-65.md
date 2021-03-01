@@ -1,11 +1,15 @@
-## Tip of the Week #65: Putting Things in their Place
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #65: Putting Things in their Place
 > Originally posted as totw/65 on 2013-12-12
 > By Hyrum Wright (hyrum@hyrumwright.org)
 > “Let me ’splain. No, there is too much. Let me sum up.” –Inigo Montoya
 
 `C++11`中添加了一种新方式往标准容器中插入元素，那就是`emplace()`系列方法了。这些方法会直接在容器中创建对象，避免创建临时对象，然后通过拷贝或者移动对象到容器中。这对于几乎所有的对象来说避免了拷贝，更加高效。尤其是对于往标准容器中存储只能移动的对象(例如`std::unique_ptr`)就更为方便了。
 
-### The Old Way and the New Way
+## The Old Way and the New Way
 让我们通过使用`vector`来存储的一个简单的例子来对比下两种方式。第一个例子是C++11之前的编码风格:
 
 ```cpp
@@ -32,7 +36,7 @@ void addBetterFoo() {
 }
 ```
 
-### Using Emplace Methods for Move-Only Operations
+## Using Emplace Methods for Move-Only Operations
 到目前为止，我们已经研究过`emplace`方法可以提高性能的情况，此外它可以让之前不能工作的代码可以正常工作，例如容器中的类型是只能被移动的类型像`std::unique_ptr`。考虑下面这段代码:
 
 ```cpp
@@ -73,5 +77,5 @@ v1.emplace(v1.begin(), new Foo(1, 2));
 ```
 实际上，我们不希望看到上述构造unique_ptr的这些方法，而是希望通过`std::make_unique`(C++14)，或者是`absl::make_unique`(C++11)。
 
-### Conclusion
+## Conclusion
 本文使用`vector`来作为example中的标准容器，实际上`emplace`同样也适用于`map`、`list`以及其它的STL容器。当`unique_ptr`和`emplace`结合，使得在堆上分配的对象其所有权的语义更加清晰。希望通过本文能让您感受到新的容器方法的强大功能，以及满足在您自己的代码中适当使用它们的愿望。

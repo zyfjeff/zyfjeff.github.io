@@ -1,14 +1,8 @@
+---
+hide:
+  - toc        # Hide table of contents
+---
 # C++基础
-
-
-## 为什么模版的声明和定义要放在一起?
-
-## 为什么make_shared无法自定义删除器
-
-## unique_ptr为什么不能和shared_ptr一样不把删除器保存在模版参数中
-
-## shared_ptr自定义的删除器保存在哪，为什么可以不用放在模版参数中
-
 ## shared_ptr实现copy-on-write
 
 1. read端加锁copy，返回访问拷贝的shared_ptr
@@ -825,6 +819,15 @@ private:
 
 Ref: https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
 
+
+
+## 为什么模版的声明和定义要放在一起?
+
+## 为什么make_shared无法自定义删除器
+
+## unique_ptr为什么不能和shared_ptr一样不把删除器保存在模版参数中
+
+## shared_ptr自定义的删除器保存在哪，为什么可以不用放在模版参数中
 
 ## 常用链接
 

@@ -1,4 +1,8 @@
-## Tip of the Week #59: Joining Tuples
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #59: Joining Tuples
 > Originally published as totw/59 on 2013-10-21
 > By Greg Miller (jgm@google.com)
 > Updated 2018-01-24

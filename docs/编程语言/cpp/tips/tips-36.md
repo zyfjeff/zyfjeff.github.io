@@ -1,4 +1,8 @@
-## Tip of the Week #36: New Join API
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #36: New Join API
 
 > Originally published as totw/36 on 2013-03-21
 > *By Greg Miller (jgm@google.com)*

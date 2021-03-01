@@ -1,4 +1,8 @@
-## Tip of the Week #45: Avoid Flags, Especially in Library Code
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #45: Avoid Flags, Especially in Library Code
 
 > Originally posted as TotW #45 on June 3, 2013
 > *by Titus Winters

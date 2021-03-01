@@ -1,4 +1,8 @@
-## Tip of the Week #112: emplace vs. push_back
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #112: emplace vs. push_back
 
 > Originally posted as totw/112 on 2016-02-25
 > By Geoff Romer (gromer@google.com)

@@ -1,4 +1,8 @@
-## Tip of the Week #1: string_view
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #1: string_view
 
 
 > Originally published as totw/1 on 2012-04-20
@@ -6,7 +10,7 @@
 > Updated 2017-09-18
 
 
-### What’s a `string_view`, and Why Should You Care?
+## What’s a `string_view`, and Why Should You Care?
 
 
 当我们创建一个函数并且这个函数有一个参数是用来接收常量字符串的，这时你有四个选择，其中有两个是你已经知道的，另外两个你或许还不知道：
@@ -43,7 +47,7 @@ void AlreadyHasCharStar(const char* s) {
 ```
 
 
-### What to Do?
+## What to Do?
 
 
 谷歌的首选是通过`string_view`的方式来接收字符串参数，在`C++17`中可以使用`std::string_view`来替代，在那些还没有使用`C++17`的代码中可以使用`absl::string_view`来替代。
@@ -76,7 +80,7 @@ void AlreadyHasCharStar(const char* s) {
 将`string_view`添加到现存的代码中并不总是正确的，如果传递给这个函数的需要的就是一个`string`或者是一个`const char*`使用`string_view`并不会很高效。最佳的方案是从工具代码开始向上开始采用`string_view`来替换，或者是从一个新项目一开始就保持一致。
 
 
-### A Few Additional Notes
+## A Few Additional Notes
 
 
 * 和其他字符串类型不一样的点在于`string_view`传递的时候应该按照值拷贝的方式传递，就像传递`int`和`double`类型一样，因为`string_view`就是一个小数值。

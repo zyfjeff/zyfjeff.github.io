@@ -1,4 +1,8 @@
-## Tip of the Week #74: Delegating and Inheriting Constructors
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #74: Delegating and Inheriting Constructors
 
 > Originally posted as totw/74 on 2014-04-21
 > By Bradley White (bww@google.com)

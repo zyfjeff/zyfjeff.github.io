@@ -1,4 +1,8 @@
-## Tip of the Week #119: Using-declarations and namespace aliases
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #119: Using-declarations and namespace aliases
 
 > Originally posted as totw/119 on 2016-07-14
 > By Thomas Köppe (tkoeppe@google.com)
@@ -29,7 +33,7 @@ namespace abc = ::applied::bitfiddling::concepts;
 记住，这个Tips所讨论的范围仅仅在是`.cc`文件中，因为您绝不应该在头文件中放置别名，这样的别名为实现者（和实现的读者）提供了便利，
 而不是为了暴露给使用者的便利。(当然，可以在头文件中声明属于导出的API的名称别名。)
 
-### Summary
+## Summary
 
 * 不要在头文件中声明namespace别名或者是方便使用的using声明，仅在`.cc`中声明
 * 在内部的命名空间（无论是命名的还是匿名的）中声明命名空间别名和using声明。 （请勿仅为此目的添加匿名空间。）
@@ -38,17 +42,17 @@ namespace abc = ::applied::bitfiddling::concepts;
 
 > 请记住，您始终可以在块作用域中拥有本地namespace别名或using声明，这在仅有头文件的库中非常方便
 
-### Background
+## Background
 
 `C++`将名称组织到名称空间中。这种至关重要的功能允许通过将名称所有权保持在本地来扩展代码库，从而避免在其他范围内发生名称冲突。但是，由于限定名称(`foo::bar`)通常很长且很快变得混乱，
 因此命名空间会带来一定的外观负担。我们经常发现使用非限定名称(`Bar`)很方便，另外，我们可能希望为一个长期但经常使用的命名空间引入一个命名空间别名：`namespace eu = example::v1::util`。
 在本文中，我们将统称为using声明和namespace别名。
 
-### The Problem
+## The Problem
 
 命名空间的目的是帮助代码作者在名称查找和链接时避免名称冲突。别名可能会破坏名称空间提供的保护。这个问题有两个不同的方面：别名的范围和相对限定符的使用。
 
-#### Scope of the Alias
+### Scope of the Alias
 
 别名放置的范围可能会对代码的可维护性产生微妙的影响。考虑以下两个变体：
 
@@ -73,7 +77,7 @@ using ::foo::Bar;
 并且在未命名空间中声明和使用的名称不能被任何其他范围破坏。有关示例，请参[见Unnamed Namespaces](https://abseil.io/tips/119#unnamed-namespaces)。
 
 
-#### Relative Qualifiers
+### Relative Qualifiers
 
 使用`foo::`Bar的形式的using声明似乎是无害的，但实际上是模棱两可的。问题在于，依靠namespace中已经存在的名称是安全的，但是依靠不存在的名称是不安全的。考虑以下代码:
 
@@ -104,7 +108,7 @@ using internal::Params;  // OK, same as ::example::util::internal::Params
 如果名称位于同级命名空间中，例如`::example::tools::Thing`，该怎么办？您可以说`tools::Thing`或`::example::tools::Thing`。完全限定的名称始终是正确的，但使用相对名称也可能是适当的。自己来判断。
 避免许多此类问题的廉价方法是不在项目中使用与流行的顶级namespace空间（例如util）相同的namespace空间；[样式指南](https://google.github.io/styleguide/cppguide.html#Namespace_Names)明确建议这种做法。
 
-#### Demo
+### Demo
 
 以下代码显示了两种错误模式的示例。
 
@@ -153,7 +157,7 @@ void UseCase() { f(); }
 }  // namespace bar
 ```
 
-### Unnamed Namespaces
+## Unnamed Namespaces
 
 可以从封闭的namespace中访问放置在unamed namespace中的using声明，反之亦然。如果文件顶部已经有一个unamed namespace，
 则最好在其中放置所有别名。从该unamed namespace中，您可以获得额外的健壮性，可以避免与封闭的namespace中声明的内容发生冲突。
@@ -175,12 +179,12 @@ using ::foo::Quz;
 // Can use both Bar and Quz here too. (But don't declare any entities called Bar or Quz yourself now.)
 ```
 
-### Non-aliased names
+## Non-aliased names
 
 到目前为止，我们一直在谈论对非当前文件的namespace进行别名。但是，如果我们想直接使用名称而不是创建别名怎么办？我们应该说`util::Status`还是`::util::Status`？
 没有明显的答案。不同于我们到目前为止讨论过的别名声明，它们出现在文件的顶部，与实际代码相距甚远，而名称的直接使用会影响代码的本地可读性。确实，相对名称将来可能会取消，
 但是使用完全限定的名称代价很高。前导`::`符号引起的视觉混乱可能会分散注意力，不值得增加鲁棒性。在这种情况下，请根据自己的判断来决定您喜欢哪种样式。参见[TotW 130](https://abseil.io/tips/130)
 
-### Acknowledgments
+## Acknowledgments
 
 一切归功于Roman Perepelitsa（romanp@google.com），他最初在邮件列表讨论中提出了这种风格，并做出了许多更正和强调。但是，所有错误都是我的。

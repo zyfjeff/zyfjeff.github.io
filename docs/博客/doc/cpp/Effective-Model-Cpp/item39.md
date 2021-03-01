@@ -1,4 +1,8 @@
-## Item39 Consider void futures for one-shot event communication
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Item39 Consider void futures for one-shot event communication
 
 &emsp; &emsp;有的时候对于一个任务来说，希望有一种机制可以和另外一个任务进行通信，尤其是那种异步运行的任务，并且会出现一种特定事件的任务，另外一个任务需要等到这个事件的发生才能继续运行，典型的，可以是等待一个重要的数据结构进行初始化，或者是等待一个计算阶段完成，又或者是检测一个重要的值。那么什么样的方式可以处理好这种线程间的通信呢？
 

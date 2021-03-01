@@ -1,4 +1,8 @@
-## Tip of the Week #10: Splitting Strings, not Hairs
+---
+hide:
+  - toc        # Hide table of contents
+---
+# Tip of the Week #10: Splitting Strings, not Hairs
 
 > Originally published as totw/10 on 2012-08-16
 > *By Greg Miller (jgm@google.com)*
