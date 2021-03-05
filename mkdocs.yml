@@ -5,6 +5,8 @@ theme:
   language: zh
   features:
     - navigation.tabs
+    - navigation.instant
+    - toc.integrate
 
 markdown_extensions:
   - meta

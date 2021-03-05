@@ -1,36 +1,41 @@
+# 性能优化基础
 ## 工具篇
 
 * pidstat 进程级别的性能分析
 
   1. -u CPU使用率分析
-    * `%guest` 花费在运行虚拟机的cpu 百分比
-    * `%wait` 花费在等待CPU去运行的CPU百分比，这个值越高说明CPU不足比较严重
+      * `%guest` 花费在运行虚拟机的cpu 百分比
+      * `%wait` 花费在等待CPU去运行的CPU百分比，这个值越高说明CPU不足比较严重
 
 > stress-ng --cpu 10 --timeout 600 通过stress-ng模拟超过CPU核心数的进程运行时就会出现%wait值很高的场景
 
   2. -d IO分析
-    * `kB_rd/s`   每秒磁盘读取的kb数，注意这里是读次盘，并不是读缓存
-    * `kB_wr/s`   每秒磁盘写入的kb数
-    * `kB_ccwr/s` 每秒因为truncate导致page cache dirty被撤销的kb数
-    * `iodelay` 等待`同步io完成`和因为`swap in而导致的block IO完成`所需要等待的时钟周期
+      * `kB_rd/s`   每秒磁盘读取的kb数，注意这里是读次盘，并不是读缓存
+      * `kB_wr/s`   每秒磁盘写入的kb数
+      * `kB_ccwr/s` 每秒因为truncate导致page cache dirty被撤销的kb数
+      * `iodelay` 等待`同步io完成`和因为`swap in而导致的block IO完成`所需要等待的时钟周期
 
   3. -w 上下文切换分析
-    * `cswch/s` 主动让出CPU导致的上下文切换(比如等待IO)
-    * `nvcswch/s` 被动让出CPU导致的上下文切换(比如时间片用完)
+      * `cswch/s` 主动让出CPU导致的上下文切换(比如等待IO)
+      * `nvcswch/s` 被动让出CPU导致的上下文切换(比如时间片用完)
 
-> IO密集型的进程，cswch/s的值会更高一些
-> 默认pidstat显示的数进程级别的线程切换次数，但是上下文切换其实是线程级别的，所以默认只会显示主线程的上下文切换次数，需要加上-t显示所有线程的切换次数
-> 上下文切换次数增多会导致中断次数也增多，中断有很多种，其中一种叫做RES(重调度中断，通过/proc/interrupts查看)中断，让空闲的CPU来调度任务。
+!!! tips
+  IO密集型的进程，cswch/s的值会更高一些
+  默认pidstat显示的数进程级别的线程切换次数，但是上下文切换其实是线程级别的，所以默认只会显示主线程的上下文切换次数，需要加上-t显示所有线程的切换次数
+  上下文切换次数增多会导致中断次数也增多，中断有很多种，其中一种叫做RES(重调度中断，通过/proc/interrupts查看)中断，让空闲的CPU来调度任务。
 
 * mpstat 系统级别的CPU分析，分析多核CPU的整体情况，以及各个CPU的使用率、iowait等
+
+```bash
 mpstat -P ALL interval
+```
 
 * dstat
 
 * top 基于proc文件快照实现，对于生命周期比较短的进程就无能为力了
 
-  * 按下M切换到内存排序
-  * 按下P切换到CPU使用率排序
+    * 按下M切换到内存排序
+    * 按下P切换到CPU使用率排序
 
 ```bash
 As a default, percentages for these individual categories are displayed.
@@ -213,8 +218,11 @@ yum install pprof graphviz
 
 
 * heapprofiler
-pprof --base=/var/log/envoy/envoy.prof.0001.heap --svg /home/admin/alimesh/bin/envoy /var/log/envoy/envoy.prof.0008.heap
 
+```shell
+export HEAPPROFILE=/var/log/envoy/envoy.prof
+pprof --base=/var/log/envoy/envoy.prof.0001.heap --svg /home/admin/alimesh/bin/envoy /var/log/envoy/envoy.prof.0008.heap
+```
 
 * cpuprofiler
 

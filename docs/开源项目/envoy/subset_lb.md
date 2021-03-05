@@ -1,8 +1,9 @@
 # Subset Load Balancer分析
 
-## Cluster subset
+Subset本质上是将一个集群拆分成多个子集，在Envoy中这个子集称为subset，而subset的划分是根据每一个endpoint中携带的metadata来组织subset的。有了这些subset后，在路由时会根据
+请求中携带的metadata来选择路由到哪个subset集合。最后再根据集群指定的负载均衡算法从subset中选择一台机器。
 
-本质上是将一个集群拆分成多个子集群，Envoy中称为subset，而subset的划分是根据每一个endpoint中携带的metadata来组织subset集合。
+## Subset配置分析
 
 ```yaml
 {
@@ -11,15 +12,16 @@
   "subset_selectors": [],
   "locality_weight_aware": "...",
   "scale_locality_weight": "...",
-  "panic_mode_any": "..."
+  "panic_mode_any": "...",
+  "list_as_any": "..."
 }
 ```
 
 * fallback_policy:
 
-    1. NO_ENDPOINT 如果没有匹配的subset就失败
-    2. ANY_ENDPOINT 如果没有匹配的subset就从整个集群中按照负载均衡的策略来选择
-    3. DEFAULT_SUBSET 匹配指定的默认subset，如果机器都没有指定subset那么就使用ANY_ENDPOINT
+    1. NO_FALLBACK 如果没有匹配的subset就失败，返回no healthy upstream类似的错误。
+    2. ANY_ENDPOINT 如果没有匹配的subset就从整个集群中按照负载均衡的策略来选择。
+    3. DEFAULT_SUBSET 如果没有匹配的subset，就使用默认配置的subset，如果配置的默认subset也不存在就等同于NO_FALLBACK
 
 * default_subset
 
@@ -47,7 +49,23 @@
 
 * panic_mode_any
 
+
 默认子集不为空，但是通过fallback策略使用默认子集的时候，仍然没有选择到主机，那么通过这个选项会使得从所有机器中选择一台机器来进行路由
+
+
+```C++
+  if (cluster->lbSubsetInfo().isEnabled()) {
+    lb_ = std::make_unique<SubsetLoadBalancer>(
+        cluster->lbType(), priority_set_, parent_.local_priority_set_, cluster->stats(),
+        cluster->statsScope(), parent.parent_.runtime_, parent.parent_.random_,
+        cluster->lbSubsetInfo(), cluster->lbRingHashConfig(), cluster->lbMaglevConfig(),
+        cluster->lbLeastRequestConfig(), cluster->lbConfig());
+  }
+  .....
+```
+
+
+## 例子
 
 
 * Example
@@ -167,5 +185,3 @@ Example:
               envoy.lb:
                 env: taobao
 ```
-
-Reference: https://github.com/envoyproxy/envoy/blob/master/source/docs/subset_load_balancer.md
