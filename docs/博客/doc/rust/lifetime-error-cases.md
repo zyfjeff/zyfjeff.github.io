@@ -155,7 +155,7 @@ error[E0499]: cannot borrow `num_ref` as mutable more than once at a time
 
 **解决方案**
 
-把`&mut self`和`num_ref`的关系解，不要用相同的生命周期，使用编译器默认给我`some_method`添加的生命周期即可。 
+把`&mut self`和`num_ref`的关系解耦，不要用相同的生命周期，使用编译器默认给我`some_method`添加的生命周期即可。 
 
 ```rust
 impl<'a> NumRef<'a> {
