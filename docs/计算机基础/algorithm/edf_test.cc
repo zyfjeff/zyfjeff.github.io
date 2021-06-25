@@ -15,9 +15,10 @@ int main() {
   }
 
   for (uint32_t i = 0; i < num_entries * (num_entries + 1) / 2; ++i) {
-    auto p = sched.pick();
+    auto p = sched.pickAndAdd([](const uint32_t& host) {
+      return host + 1;
+    });
     ++pick_count[*p];
-    sched.add(*p + 1, p);
   }
 
   for (uint32_t i = 0; i < num_entries; ++i) {
@@ -32,8 +33,9 @@ int main() {
   sched2.add(1, entries[0]);
 
   for(uint32_t i = 0; i < 6; ++i) {
-    auto p = sched2.pick();
+    auto p = sched2.pickAndAdd([](const uint32_t& host) {
+      return host + 1;
+    });
     std::cout << *p + 1 << std::endl;
-    sched2.add(*p + 1, p);
   }
 }

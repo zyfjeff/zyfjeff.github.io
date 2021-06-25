@@ -6,8 +6,6 @@ hide:
 # GDB Tips
 
 
-
-
 ## Install pretty script
 
 1. 下载对应gcc版本的pretty script
@@ -47,7 +45,7 @@ sudo gdb
 4. set print vtbl on
 5. set print elements 0 输出全部元素
 6. handle SIGPIPE nostop
-7. info vbtl VAR 查看虚表
+7. info vtbl VAR 查看虚表
 
 ## x command
 x command

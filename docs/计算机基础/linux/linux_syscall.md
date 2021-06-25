@@ -4,7 +4,7 @@
 并且这个系统调用只在内核配置了`CONFIG_CHECKPOINT_RESTORE`选项的时候才开启，
 这个系统调用的目的是为了`checkpoint/restore`的feature。
 
-```
+```C++
 #define _GNU_SOURCE
 #include <sys/syscall.h>
 #include <sys/wait.h>
@@ -83,12 +83,11 @@ main(int argc, char *argv[])
 }
 ```
 
-### reference:
-1. [man pages](http://man7.org/linux/man-pages/man2/kcmp.2.html)
+* [man pages](http://man7.org/linux/man-pages/man2/kcmp.2.html)
 
 ## vsock (4.8+)
 
-```3
+```C++
   #include <sys/socket.h>
   #include <linux/vm_sockets.h>
 
@@ -107,7 +106,7 @@ reference:
 
 用于判断一个文件是否在内存中
 
-```
+```C++
        mincore - determine whether pages are resident in memory
 
 SYNOPSIS
@@ -126,7 +125,7 @@ reference:
 创建一个匿名文件，这个文件的行为和一个普通文件一样，但是和普通文件不同的是，这个文件是存放在内存中的
 当所有引用丢失的时候会自动释放。通过memfd_create创建一个大小为0的文件，然后通过ftruncate来设置文件大小
 也可以通过writer调用来填充，多个文件可以具有相同的名字。这个syscall的目的是为了限制fd的可用操作来避免发生一些race condition。
-一般需要结合mmap来使用，等用与在tmpfs中打开一个文件。
+一般需要结合mmap来使用，等同于在tmpfs中打开一个文件。
 
 ```
    File sealing
@@ -198,6 +197,67 @@ int main(int argc, char **argv)
 }
 ```
 
+## copy_file_range
+
+可以快速的在两个文件中拷贝数据，不需要将数据拷贝到用户态，然后再从用户态写入到另外一个文件中，典型的应用场景像Copy-On-Write(多个文件共享底层相同的数据块)、NFS等
+
+```C++
+#define _GNU_SOURCE
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+int
+main(int argc, char **argv)
+{
+    int fd_in, fd_out;
+    struct stat stat;
+    off64_t len, ret;
+
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <source> <destination>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    fd_in = open(argv[1], O_RDONLY);
+    if (fd_in == -1) {
+        perror("open (argv[1])");
+        exit(EXIT_FAILURE);
+    }
+
+    if (fstat(fd_in, &stat) == -1) {
+        perror("fstat");
+        exit(EXIT_FAILURE);
+    }
+
+    len = stat.st_size;
+
+    fd_out = open(argv[2], O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd_out == -1) {
+        perror("open (argv[2])");
+        exit(EXIT_FAILURE);
+    }
+
+    do {
+        ret = copy_file_range(fd_in, NULL, fd_out, NULL, len, 0);
+        if (ret == -1) {
+            perror("copy_file_range");
+            exit(EXIT_FAILURE);
+        }
+
+        len -= ret;
+    } while (len > 0 && ret > 0);
+
+    close(fd_in);
+    close(fd_out);
+    exit(EXIT_SUCCESS);
+}
+```
+
+https://man7.org/linux/man-pages/man2/copy_file_range.2.html
+
 ## xstat
 https://man7.org/linux/man-pages/man2/statx.2.html
 
@@ -209,3 +269,5 @@ https://lwn.net/Articles/650333/
 
 ## 未归类的
 https://lwn.net/Articles/789623/
+
+https://man7.org/tlpi/api_changes/index.html

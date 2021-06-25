@@ -10,11 +10,11 @@
 Root Context和Context是WASM Filter中比较关键的两个对象，前者用于WASM实例之间的全局共享，而Context则是和Stream相关的一个Context贯穿整个请求的生命周期
 在这个请求之上的各个WASM实例可以共享这个Context，下面这张图是Wasm实例和Context之间的关系。
 git 
-![image](./wasm_context.svg)
+![image](img/wasm_context.svg)
 
 
 Wasm在Envoy内部又分为两类，一类是用来提供Service能力的，另外一类则是用来提供Silo的，架构如下。
-![arch](./wasm-arch.jpg)
+![arch](img/wasm-arch.jpg)
 
 
 启动阶段创建Wasm Service，一个Wasm Service其实就是Wasm VM实例，可以设置为单例，也可以设置为per worker per Wasm VM
@@ -37,77 +37,82 @@ message WasmService {
 ```
 
 ```cpp
-  // Optional Wasm services. These must be initialied afer threading but before the main
-  // configuration which many reference wasm vms.
-  if (bootstrap_.wasm_service_size() > 0) {
-    auto factory = Registry::FactoryRegistry<Configuration::WasmFactory>::getFactory("envoy.wasm");
-    if (factory) {
-      for (auto& config : bootstrap_.wasm_service()) {
-        auto scope = Stats::ScopeSharedPtr(stats_store_.createScope(""));
-        Configuration::WasmFactoryContextImpl wasm_factory_context(*this, scope);
-        // 最终会调用createWasmInternal来创建WasmService
-        factory->createWasm(config, wasm_factory_context, [this](WasmServicePtr wasm) {
-          if (wasm) {
-            // If not nullptr, this is a singleton WASM service.
-            wasm_.emplace_back(std::move(wasm));
-          }
-        });
+void WasmServiceExtension::createWasm(Server::Configuration::ServerFactoryContext& context) {
+  auto plugin = std::make_shared<Common::Wasm::Plugin>(
+      config_.config(), envoy::config::core::v3::TrafficDirection::UNSPECIFIED, context.localInfo(),
+      nullptr);
+
+  auto callback = [this, &context, plugin](Common::Wasm::WasmHandleSharedPtr base_wasm) {
+    if (!base_wasm) {
+      if (plugin->fail_open_) {
+        ENVOY_LOG(error, "Unable to create Wasm service {}", plugin->name_);
+      } else {
+        ENVOY_LOG(critical, "Unable to create Wasm service {}", plugin->name_);
       }
-    } else {
-      ENVOY_LOG(warn, "No wasm factory available, so no wasm service started.");
+      return;
     }
+    if (config_.singleton()) {
+      // Return a Wasm VM which will be stored as a singleton by the Server.
+      wasm_service_ = std::make_unique<WasmService>(
+          plugin,
+          Common::Wasm::getOrCreateThreadLocalPlugin(base_wasm, plugin, context.dispatcher()));
+      return;
+    }
+    // Per-thread WASM VM.
+    // NB: the Slot set() call doesn't complete inline, so all arguments must outlive this call.
+    auto tls_slot =
+        ThreadLocal::TypedSlot<Common::Wasm::PluginHandle>::makeUnique(context.threadLocal());
+    tls_slot->set([base_wasm, plugin](Event::Dispatcher& dispatcher) {
+      return Common::Wasm::getOrCreateThreadLocalPlugin(base_wasm, plugin, dispatcher);
+    });
+    wasm_service_ = std::make_unique<WasmService>(plugin, std::move(tls_slot));
+  };
+
+  if (!Common::Wasm::createWasm(plugin, context.scope().createScope(""), context.clusterManager(),
+                                context.initManager(), context.dispatcher(), context.api(),
+                                context.lifecycleNotifier(), remote_data_provider_,
+                                std::move(callback))) {
+    // NB: throw if we get a synchronous configuration failures as this is how such failures are
+    // reported to xDS.
+    throw Common::Wasm::WasmException(
+        fmt::format("Unable to create Wasm service {}", plugin->name_));
   }
+}
 ```
 
 ```cpp
 class WasmService {
 public:
-  WasmService(Common::Wasm::WasmHandleSharedPtr singleton) : singleton_(std::move(singleton)) {}
-  WasmService(ThreadLocal::SlotPtr tls_slot) : tls_slot_(std::move(tls_slot)) {}
+  WasmService(PluginSharedPtr plugin, PluginHandleSharedPtr singleton)
+      : plugin_(plugin), singleton_(std::move(singleton)) {}
+  WasmService(PluginSharedPtr plugin, ThreadLocal::TypedSlotPtr<PluginHandle>&& tls_slot)
+      : plugin_(plugin), tls_slot_(std::move(tls_slot)) {}
 
 private:
-  Common::Wasm::WasmHandleSharedPtr singleton_;
-  ThreadLocal::SlotPtr tls_slot_;
+  PluginSharedPtr plugin_;
+  PluginHandleSharedPtr singleton_;
+  ThreadLocal::TypedSlotPtr<PluginHandle> tls_slot_;
 };
 ```
 
-WasmService 持有对wasm vm的handle，也就是`Common::Wasm::WasmHandleSharedPtr`，如果是单例就是singleton_,如果不是单例就通过tls_slot来获取
-当前线程的`Common::Wasm::WasmHandleSharedPtr`。创建WasmHandlerSharedPtr的核心代码如下:
+WasmService持有对Plugin的Handle，Plugin Handle持有Wasm Handle也就是`Common::Wasm::WasmHandleSharedPtr`，通过`getOrCreateThreadLocalPlugin`来创建
 
 ```C++
-WasmHandleSharedPtr getOrCreateThreadLocalWasm(const WasmHandleSharedPtr& base_wasm,
-                                               const PluginSharedPtr& plugin,
-                                               Event::Dispatcher& dispatcher,
-                                               CreateContextFn create_root_context_for_testing) {
-  // proxy-wasm-host中的getOrCreateThreadLocalWasm方法创建WasmHandleBase，然后
-  // 转换为派生类WasmHandle返回即可。
-  auto wasm_handle = proxy_wasm::getOrCreateThreadLocalWasm(
-      std::static_pointer_cast<WasmHandle>(base_wasm), plugin,
-      [&dispatcher, create_root_context_for_testing](
-          const WasmHandleBaseSharedPtr& base_wasm) -> WasmHandleBaseSharedPtr {
-        auto wasm =
-            std::make_shared<Wasm>(std::static_pointer_cast<WasmHandle>(base_wasm), dispatcher);
-        wasm->setCreateContextForTesting(nullptr, create_root_context_for_testing);
-        return std::make_shared<WasmHandle>(wasm);
-      });
-  return std::static_pointer_cast<WasmHandle>(wasm_handle);
-}
-
-// 本质上维护了wasm vm key到wasm vm handle的thread local map
-// 这样就可以通过wasm vm key找到对应的handle
-std::shared_ptr<WasmHandleBase>
-getOrCreateThreadLocalWasm(std::shared_ptr<WasmHandleBase> base_wasm,
-                           std::shared_ptr<PluginBase> plugin, WasmHandleCloneFactory factory) {
-  auto wasm_handle = getThreadLocalWasm(base_wasm->wasm()->vm_key());
-  if (wasm_handle) {
-    auto root_context = wasm_handle->wasm()->getOrCreateRootContext(plugin);
-    if (!wasm_handle->wasm()->configure(root_context, plugin)) {
-      base_wasm->wasm()->fail("Failed to configure thread-local Wasm code");
-      return nullptr;
+PluginHandleSharedPtr
+getOrCreateThreadLocalPlugin(const WasmHandleSharedPtr& base_wasm, const PluginSharedPtr& plugin,
+                             Event::Dispatcher& dispatcher,
+                             CreateContextFn create_root_context_for_testing) {
+  if (!base_wasm) {
+    if (!plugin->fail_open_) {
+      ENVOY_LOG_TO_LOGGER(Envoy::Logger::Registry::getLog(Envoy::Logger::Id::wasm), critical,
+                          "Plugin configured to fail closed failed to load");
     }
-    return wasm_handle;
+    return nullptr;
   }
-  return createThreadLocalWasm(base_wasm, plugin, factory);
+  return std::static_pointer_cast<PluginHandle>(proxy_wasm::getOrCreateThreadLocalPlugin(
+      std::static_pointer_cast<WasmHandle>(base_wasm), plugin,
+      getCloneFactory(getWasmExtension(), dispatcher, create_root_context_for_testing),
+      getPluginFactory(getWasmExtension())));
 }
 ```
 
@@ -398,12 +403,13 @@ pub extern "C" fn proxy_on_delete(context_id: u32) {
 ```
 
 
-基本概念:
+## 基本概念
 
-**Wasm::Context** 是Envoy和wasm插件的桥梁，Context继承了Envoy内部各个扩展点的接口，并且在每一个Envoy的扩展点上
-都创建了对应的wasm扩展，比如Http filter扩展的地方就会有一个wasm http filter扩展的实现，最终返回的就是这个Context
-对象，当一个请求进入Envoy的时候，走到wasm http filter就会调用Context的decodeHeaders、decodeData、encodeData、encodeHeaders等
-一系列的回调方法，在这些回调方法中会间接的调用wasm插件暴露出来的方法。
+* **Wasm::Context** 
+
+是Envoy和wasm插件的桥梁，Context继承了Envoy内部各个扩展点的接口，并且在每一个Envoy的扩展点上都创建了对应的wasm扩展，比如Http filter扩展的地方就会有一个wasm http filter扩展的实现，
+最终返回的就是这个Context对象，当一个请求进入Envoy的时候，走到wasm http filter就会调用Context的decodeHeaders、decodeData、encodeData、encodeHeaders等
+一系列的回调方法，在这些回调方法中会间接的调用wasm插件暴露出来的方法。同样Context中也实现了一些能力提供给插件来调用。
 
 ```cpp
 class Context : public proxy_wasm::ContextBase,
@@ -416,66 +422,12 @@ class Context : public proxy_wasm::ContextBase,
                 public std::enable_shared_from_this<Context> {
 ```
 
-**Wasm::Plugin**: 包含了wasm插件的一些信息比如、name、root_id、vm_id、plugin配置、log_prefix等
+* **proxy_wasm::ContextBase** 
 
-name: 每一个插件都有一个名字，在同一个wasm VM中是唯一的。也就是说，同一个VM中不能有多个相同name的插件
-root_id: 在一个wasm VM中是唯一的，多个插件可以拥有相同的root_id，对于具有相同root_id的插件来说，他们之间共享Context和RootContext，如果为空，那么所有的插件共享Context
-vm_id: 根据wasm code进行hash，不同的code使用不同的vm，如果code都是一样的，那么就使用同一个vm
+是VM host实现部分和VM之间的桥梁，主要有二个使用场景:
 
-
-
-wasm在Envoy的每一个扩展点中实现了wasm plugin，也就是核心的**Wasm::Plugin**，然后将Plugin对象放在Tls中
-
-```cpp
-  plugin_ = std::make_shared<Common::Wasm::Plugin>(
-      config.config().name(), config.config().root_id(), config.config().vm_config().vm_id(),
-      Common::Wasm::anyToBytes(config.config().configuration()), config.config().fail_open(),
-      context.direction(), context.localInfo(), &context.listenerMetadata());
-
-  auto plugin = plugin_;
-  auto callback = [plugin, this](const Common::Wasm::WasmHandleSharedPtr& base_wasm) {
-    // NB: the Slot set() call doesn't complete inline, so all arguments must outlive this call.
-    tls_slot_->set(
-        [base_wasm,
-         plugin](Event::Dispatcher& dispatcher) -> std::shared_ptr<ThreadLocal::ThreadLocalObject> {
-          if (!base_wasm) {
-            return nullptr;
-          }
-          return std::static_pointer_cast<ThreadLocal::ThreadLocalObject>(
-              Common::Wasm::getOrCreateThreadLocalWasm(base_wasm, plugin, dispatcher));
-        });
-  };
-
-  if (!Common::Wasm::createWasm(
-          config.config().vm_config(), plugin_, context.scope().createScope(""),
-          context.clusterManager(), context.initManager(), context.dispatcher(), context.random(),
-          context.api(), context.lifecycleNotifier(), remote_data_provider_, std::move(callback))) {
-    throw Common::Wasm::WasmException(
-        fmt::format("Unable to create Wasm HTTP filter {}", plugin->name_));
-  }
-```
-
-**WasmExtension** 将创建Wasm实例，操作stats等封装成接口，可以有多种实现。默认实现是`EnvoyWasm`。
-通过**WasmExtension**可以创建stats scope、stats统计、获取创建wasm handle的factory。
-
-
-**WasmmHandle** 持有Wasm VM的 shared_ptr，延长Wasm VM的生命周期。
-
-
-
-**Wasm** 一个Wasm对象就是一个Wasm VM实例
-
-
-
-Wasm实例在主线程创建，通过全局map存放，然后通过TLS和vm的clone机制在每一个线程创建一份VM的拷贝实例。
-
-
-
-
-**WasmVmIntegration**
-
-
-**proxy_wasm::ContextBase** 是VM host实现部分和VM之间的桥梁，而Wasm::Context则是Envoy 和 VM host之间的桥梁
+  1. 通过继承这个接口来提供host实现，wasm实例就可以通过ContextBase来使用host提供的能力，比如http、grpc调用、metrics等
+  2. 提供给host来调用wasm实例中的方法，比如wasm通过host提供的能力异步发起http调用，当响应回来的时候，host需要调用vm中对应的方法，将response传递过去。
 
 ```cpp
 class ContextBase : public RootInterface,
@@ -492,12 +444,274 @@ class ContextBase : public RootInterface,
                     public GeneralInterface {
 ```
 
-1. ContextBase提供了很多能力，这些能力用于提供给VM来操作，比如发起HTTP、GRPC调用等
-2. 与此同时，通过ContextBase也可以调用VM中的一些callback，比如当请求到来的时候，Envoy会创建ContextBase，
-   然后调用VM中的proxy_on_context_create，当第一个请求到来的时候，又会去调用VM中的proxy_on_request_headers的方法，把请求的header传递给VM
-3. 为了进行测试和检测，可以替换或扩充ContextBase的方法。
+
+* **proxy_wasm::PluginBase** 
+
+包含了wasm插件的一些信息比如、name、root_id、vm_id、plugin配置、log_prefix，这些信息都是从`PluginConfig`中获取的，是用于配置的。
+
+name: 每一个插件都有一个名字，在同一个wasm VM中是唯一的。也就是说，同一个VM中不能有多个相同name的插件
+root_id: 在一个wasm VM中是唯一的，多个插件可以拥有相同的root_id，对于具有相同root_id的插件来说，他们之间共享Context和RootContext，如果为空，那么所有的插件共享Context
+vm_id: 根据wasm code进行hash，不同的code使用不同的vm，如果code都是一样的，那么就使用同一个vm
+
+```C++
+struct PluginBase {
+  PluginBase(std::string_view name, std::string_view root_id, std::string_view vm_id,
+             std::string_view runtime, std::string_view plugin_configuration, bool fail_open)
+      : name_(std::string(name)), root_id_(std::string(root_id)), vm_id_(std::string(vm_id)),
+        runtime_(std::string(runtime)), plugin_configuration_(plugin_configuration),
+        fail_open_(fail_open), key_(root_id_ + "||" + plugin_configuration_),
+        log_prefix_(makeLogPrefix()) {}
+
+  const std::string name_;
+  const std::string root_id_;
+  const std::string vm_id_;
+  const std::string runtime_;
+  const std::string plugin_configuration_;
+  const bool fail_open_;
+
+  const std::string &key() const { return key_; }
+  const std::string &log_prefix() const { return log_prefix_; }
+
+private:
+  std::string makeLogPrefix() const;
+
+  const std::string key_;
+  const std::string log_prefix_;
+};
+```
+
+`Common::Wasm::Plugin`继承自`proxy_wasm::PluginBase`，在PluginBase的基础上增加了额外的一些插件需要的信息，比如Metadata、LocalInfo、Direction等信息
+
+```C++
+class Plugin : public proxy_wasm::PluginBase {
+public:
+  Plugin(const envoy::extensions::wasm::v3::PluginConfig& config,
+         envoy::config::core::v3::TrafficDirection direction,
+         const LocalInfo::LocalInfo& local_info,
+         const envoy::config::core::v3::Metadata* listener_metadata)
+      : PluginBase(config.name(), config.root_id(), config.vm_config().vm_id(),
+                   config.vm_config().runtime(), MessageUtil::anyToBytes(config.configuration()),
+                   config.fail_open()),
+        direction_(direction), local_info_(local_info), listener_metadata_(listener_metadata),
+        wasm_config_(std::make_unique<WasmConfig>(config)) {}
+
+  envoy::config::core::v3::TrafficDirection& direction() { return direction_; }
+  const LocalInfo::LocalInfo& localInfo() { return local_info_; }
+  const envoy::config::core::v3::Metadata* listenerMetadata() { return listener_metadata_; }
+  WasmConfig& wasmConfig() { return *wasm_config_; }
+
+private:
+  envoy::config::core::v3::TrafficDirection direction_;
+  const LocalInfo::LocalInfo& local_info_;
+  const envoy::config::core::v3::Metadata* listener_metadata_;
+  WasmConfigPtr wasm_config_;
+};
+```
+
+总结来说`Plugin`对象本身只是一个单纯的配置类，保存了插件所需要的一些信息。
 
 
+* **Envoy::Extensions::Common::Wasm::PluginHandle**
+
+是将Plugin和WasmHandle组合一起的一个对象，包含了WasmHandle和Plugin两者。
+
+```C++
+class PluginHandle : public PluginHandleBase, public ThreadLocal::ThreadLocalObject {
+public:
+  explicit PluginHandle(const WasmHandleSharedPtr& wasm_handle, const PluginSharedPtr& plugin)
+      : PluginHandleBase(std::static_pointer_cast<WasmHandleBase>(wasm_handle),
+                         std::static_pointer_cast<PluginBase>(plugin)),
+        wasm_handle_(wasm_handle),
+        root_context_id_(wasm_handle->wasm()->getRootContext(plugin, false)->id()) {}
+
+  WasmSharedPtr& wasm() { return wasm_handle_->wasm(); }
+  WasmHandleSharedPtr& wasmHandleForTest() { return wasm_handle_; }
+  uint32_t rootContextId() { return root_context_id_; }
+
+private:
+  WasmHandleSharedPtr wasm_handle_;
+  const uint32_t root_context_id_;
+};
+```
+
+PluginHandle继承了ThreadLocalObject，因此他是一个TLS对象，其创建过程如下:
+
+```C++
+std::shared_ptr<PluginHandleBase> getOrCreateThreadLocalPlugin(
+    std::shared_ptr<WasmHandleBase> base_handle, std::shared_ptr<PluginBase> plugin,
+    WasmHandleCloneFactory clone_factory, PluginHandleFactory plugin_factory) {
+  // vm_key + || + plugin key构造了PluginHandle的唯一标识
+  std::string key(std::string(base_handle->wasm()->vm_key()) + "||" + plugin->key());
+  // Get existing thread-local Plugin handle.
+  // 先查看本地是否有PluginHandle，有的话直接返回，没有的话开始创建
+  auto it = local_plugins.find(key);
+  if (it != local_plugins.end()) {
+    auto plugin_handle = it->second.lock();
+    if (plugin_handle) {
+      return plugin_handle;
+    }
+    // Remove stale entry.
+    local_plugins.erase(key);
+  }
+  // 先创建一个WasmHandle，存在当前的thread local中，然后用wasm handle初始化和配置plugin，最后创建PluginHandle
+  // Get thread-local WasmVM.
+  auto wasm_handle = getOrCreateThreadLocalWasm(base_handle, clone_factory);
+  if (!wasm_handle) {
+    return nullptr;
+  }
+  // Create and initialize new thread-local Plugin.
+  auto plugin_context = wasm_handle->wasm()->start(plugin);
+  if (!plugin_context) {
+    base_handle->wasm()->fail(FailState::StartFailed, "Failed to start thread-local Wasm");
+    return nullptr;
+  }
+  if (!wasm_handle->wasm()->configure(plugin_context, plugin)) {
+    base_handle->wasm()->fail(FailState::ConfigureFailed,
+                              "Failed to configure thread-local Wasm plugin");
+    return nullptr;
+  }
+  auto plugin_handle = plugin_factory(wasm_handle, plugin);
+  local_plugins[key] = plugin_handle;
+  return plugin_handle;
+}
+```
+
+
+* **Envoy::Extension::Common::Wasm::Wasm**
+
+Wasm VM实例了，负责执行Plugin，继承自WasmBase，实现了Wasm的Envoy侧接口，Envoy通过Wasm可以载入Plugin、创建Context、RootContext、调用Wasm Plugin中暴露的方法，
+Context对象就依赖Wasm对象来调用Wasm插件中的方法，所以Context对象的构造依赖Wasm对象。
+
+
+```C++
+  Context();                                                                    // Testing.
+  Context(Wasm* wasm);                                                          // Vm Context.
+  Context(Wasm* wasm, const PluginSharedPtr& plugin);                           // Root Context.
+  Context(Wasm* wasm, uint32_t root_context_id, const PluginSharedPtr& plugin); // Stream context.
+```
+
+* **Envoy::Extensions::Common::Wasm::WasmHandle**
+
+```C++
+class WasmHandle : public WasmHandleBase, public ThreadLocal::ThreadLocalObject {
+public:
+  explicit WasmHandle(const WasmSharedPtr& wasm)
+      : WasmHandleBase(std::static_pointer_cast<WasmBase>(wasm)), wasm_(wasm) {}
+
+  WasmSharedPtr& wasm() { return wasm_; }
+
+private:
+  WasmSharedPtr wasm_;
+};
+```
+
+`WasmHandle`实际上包含了Wasm，是对Wasm的包装，同时他也是一个TLS对象，在每一个线程都会存一份。
+
+
+wasm在Envoy的每一个扩展点中实现了wasm plugin，也就是核心的**Wasm::Plugin**，然后将Plugin对象放在Tls中
+
+```cpp
+FilterConfig::FilterConfig(const envoy::extensions::filters::http::wasm::v3::Wasm& config,
+                           Server::Configuration::FactoryContext& context)
+    : tls_slot_(
+          ThreadLocal::TypedSlot<Common::Wasm::PluginHandle>::makeUnique(context.threadLocal())) {
+  plugin_ = std::make_shared<Common::Wasm::Plugin>(
+      config.config(), context.direction(), context.localInfo(), &context.listenerMetadata());
+
+  auto plugin = plugin_;
+  auto callback = [plugin, this](const Common::Wasm::WasmHandleSharedPtr& base_wasm) {
+    // NB: the Slot set() call doesn't complete inline, so all arguments must outlive this call.
+    tls_slot_->set([base_wasm, plugin](Event::Dispatcher& dispatcher) {
+      return Common::Wasm::getOrCreateThreadLocalPlugin(base_wasm, plugin, dispatcher);
+    });
+  };
+
+  if (!Common::Wasm::createWasm(plugin_, context.scope().createScope(""), context.clusterManager(),
+                                context.initManager(), context.dispatcher(), context.api(),
+                                context.lifecycleNotifier(), remote_data_provider_,
+                                std::move(callback))) {
+    throw Common::Wasm::WasmException(
+        fmt::format("Unable to create Wasm HTTP filter {}", plugin->name_));
+  }
+}
+```
+
+* **WasmExtension** 
+
+将创建Wasm Handle实例、克隆Wasm实例、创建PluginHandle，创建stats、stats统计等封装成接口，可以有多种实现。默认实现是`EnvoyWasm`。
+
+```C++
+class WasmExtension : Logger::Loggable<Logger::Id::wasm> {
+public:
+  WasmExtension() = default;
+  virtual ~WasmExtension() = default;
+
+  virtual void initialize() = 0;
+  virtual PluginHandleExtensionFactory pluginFactory() = 0;
+  virtual WasmHandleExtensionFactory wasmFactory() = 0;
+  virtual WasmHandleExtensionCloneFactory wasmCloneFactory() = 0;
+  enum class WasmEvent : int {
+    Ok,
+    RemoteLoadCacheHit,
+    RemoteLoadCacheNegativeHit,
+    RemoteLoadCacheMiss,
+    RemoteLoadCacheFetchSuccess,
+    RemoteLoadCacheFetchFailure,
+    UnableToCreateVM,
+    UnableToCloneVM,
+    MissingFunction,
+    UnableToInitializeCode,
+    StartFailed,
+    ConfigureFailed,
+    RuntimeError,
+  };
+  virtual void onEvent(WasmEvent event, const PluginSharedPtr& plugin) = 0;
+  virtual void onRemoteCacheEntriesChanged(int remote_cache_entries) = 0;
+  virtual void createStats(const Stats::ScopeSharedPtr& scope, const PluginSharedPtr& plugin)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) = 0;
+  virtual void resetStats() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_) = 0; // Delete stats pointers
+
+  // NB: the Scope can become invalid if, for example, the owning FilterChain is deleted. When that
+  // happens the stats must be recreated. This hook verifies the Scope of any existing stats and if
+  // necessary recreates the stats with the newly provided scope.
+  // This call takes out the mutex_ and calls createStats and possibly resetStats().
+  Stats::ScopeSharedPtr lockAndCreateStats(const Stats::ScopeSharedPtr& scope,
+                                           const PluginSharedPtr& plugin);
+
+  void resetStatsForTesting();
+
+protected:
+  absl::Mutex mutex_;
+  ScopeWeakPtr scope_;
+};
+```
+
+* **WasmVmIntegration**
+
+```C++
+struct WasmVmIntegration {
+  virtual ~WasmVmIntegration() {}
+  virtual WasmVmIntegration *clone() = 0;
+  virtual proxy_wasm::LogLevel getLogLevel() = 0;
+  virtual void error(std::string_view message) = 0;
+  virtual void trace(std::string_view message) = 0;
+  // Get a NullVm implementation of a function.
+  // @param function_name is the name of the function with the implementation specific prefix.
+  // @param returns_word is true if the function returns a Word and false if it returns void.
+  // @param number_of_arguments is the number of Word arguments to the function.
+  // @param plugin is the Null VM plugin on which the function will be called.
+  // @param ptr_to_function_return is the location to write the function e.g. of type
+  // WasmCallWord<3>.
+  // @return true if the function was found.  ptr_to_function_return could still be set to nullptr
+  // (of the correct type) if the function has no implementation.  Returning true will prevent a
+  // "Missing getFunction" error.
+  virtual bool getNullVmFunction(std::string_view function_name, bool returns_word,
+                                 int number_of_arguments, NullPlugin *plugin,
+                                 void *ptr_to_function_return) = 0;
+};
+```
+
+**WasmVmIntegration**
 
 **WasmBase**
 

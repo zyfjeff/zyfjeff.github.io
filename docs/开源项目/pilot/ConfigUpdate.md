@@ -347,3 +347,48 @@ func (s *DiscoveryServer) pushConnection(con *Connection, pushEv *Event) error {
 	return nil
 }
 ```
+
+
+如何确定一个配置变更是否需要推送给某个Proxy?
+
+1. 首先无论是任何配置，在发生变更的时候都会带上GVK。
+
+```go
+
+    // 注册Service Handler的时候，也会带上ConfigsUpdated字段
+	serviceHandler := func(svc *model.Service, _ model.Event) {
+		pushReq := &model.PushRequest{
+			Full: true,
+			ConfigsUpdated: map[model.ConfigKey]struct{}{{
+				Kind:      gvk.ServiceEntry,
+				Name:      string(svc.Hostname),
+				Namespace: svc.Attributes.Namespace,
+			}: {}},
+			Reason: []model.TriggerReason{model.ServiceUpdate},
+		}
+		s.XDSServer.ConfigUpdate(pushReq)
+	}
+	s.ServiceController().AppendServiceHandler(serviceHandler)
+
+
+    // Config Controller注册配置变更Handler的时候会带上ConfigsUpdated字段，表明是什么配置、名字是什么、Namespace是什么等信息。
+	if s.configController != nil {
+		configHandler := func(old config.Config, curr config.Config, event model.Event) {
+			pushReq := &model.PushRequest{
+				Full: true,
+				ConfigsUpdated: map[model.ConfigKey]struct{}{{
+					Kind:      curr.GroupVersionKind,
+					Name:      curr.Name,
+					Namespace: curr.Namespace,
+				}: {}},
+				Reason: []model.TriggerReason{model.ConfigUpdate},
+			}
+			s.XDSServer.ConfigUpdate(pushReq)
+			if event != model.EventDelete {
+				s.statusReporter.AddInProgressResource(curr)
+			} else {
+				s.statusReporter.DeleteInProgressResource(curr)
+			}
+		}
+        .....
+```

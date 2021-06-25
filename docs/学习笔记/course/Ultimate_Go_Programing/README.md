@@ -131,44 +131,43 @@ hide:
 
 * 小心`:=`赋值
 
-	```go
-	package main
+```go
+package main
 
-	import (
-		"fmt"
-		"os"
-	)
+import (
+	"fmt"
+	"os"
+)
 
-	func main() {
-		var data []string
+func main() {
+	var data []string
 
-		killswitch := os.Getenv("KILLSWITCH")
+	killswitch := os.Getenv("KILLSWITCH")
 
-		if killswitch == "" {
-			fmt.Println("kill switch is off")
-			// data被当作全新的变量，覆盖了上面的data
-			data, err := getData()
+	if killswitch == "" {
+		fmt.Println("kill switch is off")
+		// data被当作全新的变量，覆盖了上面的data
+		data, err := getData()
 
-			if err != nil {
-				panic("ERROR!")
-			}
-
-			fmt.Printf("Data was fetched! %d\n", len(data))
+		if err != nil {
+			panic("ERROR!")
 		}
 
-		for _, item := range data {
-			fmt.Println(item)
-		}
+		fmt.Printf("Data was fetched! %d\n", len(data))
 	}
 
-	func getData() ([]string, error) {
-		// Simulating getting the data from a datasource - lets say a DB.
-		return []string{"there","are","no","strings","on","me"}, nil
+	for _, item := range data {
+		fmt.Println(item)
 	}
-	```
+}
 
-### Reference
+func getData() ([]string, error) {
+	// Simulating getting the data from a datasource - lets say a DB.
+	return []string{"there","are","no","strings","on","me"}, nil
+}
+```
 
+* Reference
 [What's in a name?](https://talks.golang.org/2014/names.slide#1)
 
 ### Struct
@@ -2587,3 +2586,4 @@ panic: Aw, snap
 * https://brunocalza.me/how-buffer-pool-works-an-implementation-in-go/
 * https://www.youtube.com/watch?v=f6kdp27TYZs
 * https://talks.golang.org/2013/advconc.slide#1
+* https://steveazz.xyz/blog/go-performance-tools-cheat-sheet/

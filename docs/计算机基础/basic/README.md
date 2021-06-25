@@ -325,6 +325,14 @@ Idx Name          Size      VMA       LMA       File off  Algn
 ```
 
 
+## 编程范式
+
+命令式编程(Imperative)、声明式编程(Declarative)、函数式编程(Functional)
+
+命令式编程: 一步一步告诉计算机做做什么、再做什么
+声明式编程: 告诉计算机应该做什么，但是不指定具体要怎么做
+函数式编程: 和声明式编程类似，但是他式通过一个个函数串连起来的。
+
 ## 如何获取调用链?
 
 
@@ -341,7 +349,7 @@ ARP协议工作在二层，用于获取IP地址对应的mac地址，报文的格
 
 
 ## Debuger、Compiler、ELF
-
+https://grafana.com/grafana/dashboards/7645
 通过编译器的`-g`参数可以产生debug信息，最为重要的是`debug_line`、`debug_info`两类，前者用来提供行号信息，后者就是著名的`DWARF`提供调试信息。
 `debug_line`的格式如下:
 

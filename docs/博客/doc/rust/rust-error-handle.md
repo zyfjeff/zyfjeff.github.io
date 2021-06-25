@@ -184,7 +184,7 @@ fn main() {
 ```rust
     pub fn map_or<U, F: FnOnce(T) -> U>(self, default: U, f: F) -> U {
         match self {
-            Some(t) => f(t),
+            Some(t) => f(t), 
             None => default,
         }
     }

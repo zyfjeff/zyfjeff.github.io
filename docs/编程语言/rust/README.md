@@ -4,8 +4,6 @@
   1. `#[allow(non_camel_case_types)]`   // 允许非驼峰命名，默认情况下，类型名需要是驼峰类型，否则会有警告
   2. `#![allow(overflowing_literals)]`
 
-* (TODO)为什么`Cell`要求类型必须是Copy的，而不是Clone?
-
 * (TODO)Rust中默认的“取引用”、“解引用”操作是互补抵消的关系， 互为逆运算。但是，在Rust中，只允许自定义“解引用”，不允许自定义“取引用”。
   如果类型有自定义“解引用”，那么对它执行“解引用”和“取引用”就不再是互补抵消的结果了。先`&`后`*`以及先`*`后`&`的结果是不同的。
 
@@ -1297,6 +1295,45 @@ pub fn write_record<I, T>(&mut self, record: I) -> csv::Result<()>
 * The AsRef<[u8]> bound is useful because types like `String`, `&str`, `Vec<u8>` and `&[u8]` all satisfy it.
 
 
+## Lifetime
+
+
+## trait
+
+* `PartialEq` 相等比较、具备对称性和传递性
+
+```rust
+    // 对称性
+    assert!(a == b && b == a);
+    assert!(b == c && c == b);
+    assert!(a == c && c == a);
+
+    // 传递性
+    assert!(a == b && b == c && a == c);
+    assert!(c == b && b == a && c == a);
+```
+
+* `Eq`在`PartialEq`的基础上具备了自反性，也就是对于任意`a`有`a == a`
+
+其中浮点数都实现了`PartialEq`，但是没有实现`Eq`，因为`NaN != NaN`
+
+* `PartialOrd` 实现了`<`、`<=`、`>`、`>=`等运算符，并且具备非对称性和传递性
+
+```rust
+  若 a < b 则 !(a > b) （非对称性）
+  若 a < b && b < c 则 a < c （传递性）
+```
+
+* `Ord`更严格的实现了`PartialOrd`和`Eq`，因为浮点数不具备`Ord`特性，但是符合`PartialOrd`
+
+因为浮点数具备下列特点，因此不满足`Ord`，只满足`PartialOrd`
+
+```rust
+  NaN < 0 == false
+  NaN >= 0 == false
+```
+
+
 ## Link
 
 * [Cfg Test and Cargo Test a Missing Information](https://freyskeyd.fr/cfg-test-and-cargo-test-a-missing-information/)
@@ -1311,6 +1348,7 @@ pub fn write_record<I, T>(&mut self, record: I) -> csv::Result<()>
 * [Frustrated? It's not you, it's Rust](https://fasterthanli.me/articles/frustrated-its-not-you-its-rust)
 * [Clear explanation of Rust’s module system](http://www.sheshbabu.com/posts/rust-module-system/?spm=ata.13261165.0.0.13f861b6Lw1Py4)
 * https://depth-first.com/articles/2020/01/27/rust-ownership-by-example/
+
 
 ## TODO
 1. https://github.com/stjepang/polling(done)
@@ -1342,3 +1380,5 @@ pub fn write_record<I, T>(&mut self, record: I) -> csv::Result<()>
 27. https://github.com/rust-lang/rfcs/blob/master/text/2005-match-ergonomics.md(Done)
 28. https://github.com/nox/rust-rfcs/blob/master/text/0738-variance.md
 29. https://arzg.github.io/lang/
+30. https://aloso.github.io/
+31. https://boats.gitlab.io/blog/post/wakers-i/

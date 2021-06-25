@@ -4,5 +4,7 @@
 平时喜欢研究各种语言特性、逆向、Linux内核等。毕业于西安邮电大学师从陈莉君教授。
 
 ## 公众号
-![公众号](images/cookbook.png){: align=left }
 
+<figure>
+  <img src="images/cookbook.png" width="800" />
+</figure>

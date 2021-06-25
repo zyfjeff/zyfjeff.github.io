@@ -26,7 +26,7 @@ Envoy Filter和`Service`、`Virtual Service`、`DestinationRules`等等这些CRD
     }
     ```
 
-2. 通过`ps.createNewContext`初始化`Service`、V`irtualService`、`DestinationRules`、`Envoyfilters`等
+2. 通过`ps.createNewContext`初始化`Service`、`VirtualService`、`DestinationRules`、`Envoyfilters`等
 
     ```go
     func (ps *PushContext) createNewContext(env *Environment) error {
@@ -67,6 +67,10 @@ Envoy Filter和`Service`、`Virtual Service`、`DestinationRules`等等这些CRD
         ProxyPrefixMatch string
     }
     ```
+
+`EnvoyFilter`本质上就是一个`Selector`和一个`Patch`(istio封装成`EnvoyFilterWrapper`)，通过`Selector`找到匹配的`Sidecar`，然后给其打上`Patch`，而这个Patch本质就是"往配置中的哪个部分进行某些操作，操作的内容是什么"
+为此istio将其包装成`ApplyTo`、`Operation`
+
 
 
 **Apply流程:**
