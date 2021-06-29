@@ -1,7 +1,0 @@
-[package]
-name = "lists"
-version = "0.1.0"
-authors = ["tianqian.zyf <tianqian.zyf@alibaba-inc.com>"]
-edition = "2018"
-
-[dependencies]
