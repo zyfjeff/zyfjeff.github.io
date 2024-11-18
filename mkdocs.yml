@@ -3,14 +3,27 @@ theme:
   name: material
   custom_dir: overrides
   language: zh
+  font:
+    text: Host Grotesk
+    code: Roboto Mono
   features:
     - navigation.tabs
     - navigation.instant
-    - toc.integrate
+    - navigation.indexes
+    - header.autohide
+    - navigation.footer
+
+plugins:
+  - search
+  - blog
+
+nav:
+  - Home: index.md
+  - Blog:
+    - blog/index.md
 
 markdown_extensions:
   - meta
-  - attr_list
   - pymdownx.highlight:
       linenums: true
   - pymdownx.superfences
@@ -20,6 +33,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.keys
+  - abbr
   - attr_list
   - pymdownx.tasklist:
       custom_checkbox: true
@@ -29,7 +43,7 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/zyfjeff
 
-copyright: Copyright &copy; 2020 - 2021 程序员的Cookbook
+copyright: Copyright &copy; 2024 - 2025 程序员的Cookbook
 
 repo_url: https://github.com/zyfjeff/zyfjeff.github.io
 repo_name: zyfjeff/zyfjeff.github.io
