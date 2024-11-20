@@ -34,6 +34,9 @@ theme:
     - navigation.indexes
     - header.autohide
     - navigation.footer
+    - content.code.copy
+    - content.code.annotate
+    - content.tooltips
 
 plugins:
   - search
@@ -54,7 +57,9 @@ nav:
 markdown_extensions:
   - meta
   - pymdownx.highlight:
-      linenums: true
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
   - pymdownx.superfences
   - pymdownx.inlinehilite
   - pymdownx.snippets
@@ -63,7 +68,12 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.keys
   - abbr
+  - md_in_html
   - attr_list
+  - footnotes
+  - def_list
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.tasklist:
       custom_checkbox: true
 
