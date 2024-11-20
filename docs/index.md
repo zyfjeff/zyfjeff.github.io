@@ -2,7 +2,7 @@
 
 ## 正在读的一些书
 
-## Learing English tools
+## Tools for learning English
 
 * [多邻国](https://www.duolingo.com/)
 * [Voscreen](https://voscreen.com)
