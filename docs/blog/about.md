@@ -1,6 +1,7 @@
 ## 个人介绍
 
-目前主要研究安全容器，对虚拟化有一点点研究，之前搞过Envoy，对C++/Rust、Linux内核感兴趣。
+目前主要研究安全容器，对虚拟化有一点点研究，之前搞过Envoy，对C++/Rust、Linux内核感兴趣。同时我也是一个二个娃的爸爸，大儿子在学围棋，我自己
+也顺带和他一起学习围棋，目前围棋水平目测十级。
 
 
 ### 社交信息
@@ -17,6 +18,7 @@
 * [sentinel-cpp](https://github.com/alibaba/sentinel-cpp)
 * [Envoy](https://github.com/envoyproxy/envoy/pulls?q=is%3Apr+author%3Azyfjeff+is%3Aclosed)
 * [Nydus](https://github.com/dragonflyoss/nydus/pulls?q=is%3Apr+is%3Aclosed+author%3Azyfjeff)
+* [Nydus-snapshotter](https://github.com/containerd/nydus-snapshotter)
 * [fuse-backend-rs](https://github.com/cloud-hypervisor/fuse-backend-rs/pulls?q=is%3Apr+author%3Azyfjeff+is%3Aclosed)
 
 ### 一些轮子

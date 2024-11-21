@@ -2,7 +2,12 @@
 
 ## 正在读的一些书和文档
 
+- [ ] [Under The Hood Of Executables](https://github.com/mohitmishra786/underTheHoodOfExecutables/tree/main)
+
+
 ## 读过的一些书
+
+- [x] [二进制分析实战](https://book.douban.com/subject/35645956/)
 
 
 ## Tools for learning English
