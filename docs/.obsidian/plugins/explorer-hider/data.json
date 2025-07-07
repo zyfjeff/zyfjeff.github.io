@@ -7,6 +7,12 @@
       "type": "folder",
       "hiddenInNav": true,
       "hiddenInBookmarks": false
+    },
+    {
+      "path": "resources",
+      "type": "folder",
+      "hiddenInNav": true,
+      "hiddenInBookmarks": false
     }
   ],
   "alwaysHideInBookmarks": false,
