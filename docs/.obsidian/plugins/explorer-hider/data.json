@@ -1,0 +1,14 @@
+{
+  "useSnippets": false,
+  "showAll": false,
+  "snippets": [
+    {
+      "path": "_templates",
+      "type": "folder",
+      "hiddenInNav": true,
+      "hiddenInBookmarks": false
+    }
+  ],
+  "alwaysHideInBookmarks": false,
+  "buttonInContextBookmark": false
+}

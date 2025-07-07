@@ -47,6 +47,19 @@ plugins:
       pagination_keep_content: true
       archive_date_format: yyyy/MMMM
   - tags
+  - pub-obsidian:
+      obsidian_dir: .obsidian
+      templates_dir: _templates
+      backlinks:
+        enabled: true
+      callouts:
+        enabled: true
+        indentation: spaces
+      comments:
+        enabled: true
+        inject_as_html: false
+      links:
+        wikilinks_enabled: true
 
 nav:
   - Home: index.md
